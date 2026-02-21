@@ -1,0 +1,373 @@
+// School/Coaching Management SaaS - Production Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ CORE: Organizations (Schools/Coaching) ============
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  type        String   // "school" | "coaching"
+  email       String
+  phone       String?
+  address     String?
+  city        String?
+  state       String?
+  country     String   @default("India")
+  logo        String?
+  website     String?
+  status      String   @default("pending") // pending | approved | rejected | suspended
+  approvedAt  DateTime?
+  approvedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users            User[]
+  subscription     Subscription?
+  students        Student[]
+  staff           Staff[]
+  classes         Class[]
+  feePlans        FeePlan[]
+  payments        Payment[]
+  exams           Exam[]
+  libraryBooks    LibraryBook[]
+  hostelRooms     HostelRoom[]
+  bookProducts    BookProduct[]
+  bookSales       BookSale[]
+}
+
+// ============ AUTH & USERS ============
+// Role: super_admin | school_admin | staff | teacher | student | parent
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          String    // super_admin, school_admin, staff, teacher, student, parent
+  organizationId String?
+  phone         String?
+  avatar        String?
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ============ SUBSCRIPTION ============
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  name        String   // Basic, Pro, Enterprise
+  slug        String   @unique
+  description String?
+  price       Float    // monthly in INR
+  maxStudents Int      @default(100)
+  maxStaff    Int      @default(10)
+  features    String?  // JSON array of features
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                String   @id @default(cuid())
+  organizationId    String   @unique
+  planId            String
+  status            String   @default("active") // active | cancelled | expired | past_due
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  stripeCustomerId  String?
+  stripeSubscriptionId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan  @relation(fields: [planId], references: [id])
+}
+
+// ============ SCHOOL DATA ============
+model Student {
+  id             String   @id @default(cuid())
+  organizationId String
+  rollNo         String?
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  dateOfBirth    DateTime?
+  gender         String?
+  address        String?
+  guardianName   String?
+  guardianPhone  String?
+  classId        String?
+  image          String?   // profile image URL
+  resultToken    String?  @unique // unique token for result page
+  status         String   @default("active") // active | inactive | graduated | left
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  class          Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  attendances    Attendance[]
+  feePayments    Payment[]
+  examResults    ExamResult[]
+}
+
+model Staff {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String?
+  firstName      String
+  lastName       String
+  email          String
+  phone          String?
+  role           String   // teacher, accountant, admin, etc.
+  designation    String?
+  joinDate       DateTime?
+  salary         Float?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffAttendances StaffAttendance[]
+}
+
+model Class {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String   // e.g. "Class 10-A", "JEE Batch 1"
+  section        String?
+  academicYear   String?
+  capacity       Int?
+  room           String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  students     Student[]
+}
+
+model FeePlan {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String   // e.g. "Monthly Tuition", "Annual Fee"
+  amount         Float
+  frequency      String   // one_time | monthly | quarterly | yearly
+  classId        String?  // optional: class-specific fee
+  dueDay         Int?     // day of month for due
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id             String    @id @default(cuid())
+  organizationId String
+  studentId      String
+  amount         Float
+  paidAt         DateTime  @default(now())
+  method         String    // cash | card | upi | bank_transfer
+  reference      String?
+  status         String    @default("pending") // pending | verified | refunded
+  verifiedAt     DateTime? // set when school/coaching admin verifies; receipt only then
+  verifiedBy     String?   // user id who verified
+  feePlanId      String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student      Student?     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  studentId String
+  date       DateTime
+  status     String   // present | absent | late | leave
+  remarks    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  student Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date])
+}
+
+// ============ EXAMINATIONS & RESULTS ============
+model Exam {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String   // e.g. "Half Yearly 2024-25"
+  examType       String   // mid_term | final | unit_test
+  classId        String?
+  academicYear   String?
+  startDate      DateTime?
+  endDate        DateTime?
+  status         String   @default("draft") // draft | published
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subjects      ExamSubject[]
+  results       ExamResult[]
+}
+
+model ExamSubject {
+  id       String @id @default(cuid())
+  examId   String
+  name     String   // e.g. "Mathematics", "English"
+  maxMarks Float
+  order   Int      @default(0)
+
+  exam    Exam?    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  results ExamResult[]
+}
+
+model ExamResult {
+  id            String   @id @default(cuid())
+  examId        String
+  studentId     String
+  subjectId     String
+  marksObtained Float
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  exam    Exam?         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student Student?      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject ExamSubject?  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId, subjectId])
+}
+
+// ============ STAFF ATTENDANCE ============
+model StaffAttendance {
+  id         String   @id @default(cuid())
+  staffId    String
+  date       DateTime
+  status     String   // present | absent | late | leave
+  remarks    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  staff Staff? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+}
+
+// ============ LIBRARY ============
+model LibraryBook {
+  id             String   @id @default(cuid())
+  organizationId String
+  title          String
+  author         String?
+  isbn           String?
+  category       String?
+  totalCopies     Int     @default(1)
+  availableCopies Int    @default(1)
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  issues        LibraryIssue[]
+}
+
+model LibraryIssue {
+  id         String    @id @default(cuid())
+  bookId     String
+  studentId  String?   // or staff
+  issuedAt   DateTime  @default(now())
+  dueDate    DateTime?
+  returnedAt DateTime?
+  status     String    @default("issued") // issued | returned | overdue
+
+  book LibraryBook? @relation(fields: [bookId], references: [id], onDelete: Cascade)
+}
+
+// ============ HOSTEL ============
+model HostelRoom {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String   // e.g. "Block A-101"
+  capacity       Int      @default(1)
+  currentOccupancy Int    @default(0)
+  floor          String?
+  rent           Float?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  allocations  HostelAllocation[]
+}
+
+model HostelAllocation {
+  id        String    @id @default(cuid())
+  roomId    String
+  studentId String
+  fromDate  DateTime  @default(now())
+  toDate    DateTime?
+  status    String    @default("active")
+
+  room HostelRoom? @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+// ============ BOOK SELLING ============
+model BookProduct {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String   // e.g. "Notebook", "Physics Book"
+  sku            String?
+  price          Float
+  stock          Int      @default(0)
+  category       String?  // book | copy | stationery
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sales         BookSaleItem[]
+}
+
+model BookSale {
+  id             String   @id @default(cuid())
+  organizationId String
+  invoiceNo      String?
+  soldAt         DateTime @default(now())
+  totalAmount    Float
+  customerName   String?
+  customerPhone  String?
+  status         String   @default("completed")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items         BookSaleItem[]
+}
+
+model BookSaleItem {
+  id        String   @id @default(cuid())
+  saleId    String
+  productId String
+  quantity  Int
+  unitPrice Float
+  amount    Float
+
+  sale    BookSale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product BookProduct?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
