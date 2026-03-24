@@ -38,11 +38,10 @@ export function DashboardLayout({ children, title, nav, role }: DashboardLayoutP
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded-md px-2 py-2 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium ${
-                    pathname === item.href
+                  className={`rounded-md px-2 py-2 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium ${pathname === item.href
                       ? "bg-primary-50 text-primary-700"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   {item.label}
                 </Link>
@@ -54,11 +53,10 @@ export function DashboardLayout({ children, title, nav, role }: DashboardLayoutP
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded px-2 py-1 text-xs font-medium ${
-                    pathname === item.href
+                  className={`rounded px-2 py-1 text-xs font-medium ${pathname === item.href
                       ? "bg-primary-50 text-primary-700"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   {item.label}
                 </Link>
