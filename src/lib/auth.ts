@@ -24,7 +24,7 @@ export async function createSession(userId: string): Promise<string> {
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role,
+    role: user.role as "super_admin" | "school_admin",
     organizationId: user.organizationId,
   };
   const token = Buffer.from(JSON.stringify(payload)).toString("base64url");
