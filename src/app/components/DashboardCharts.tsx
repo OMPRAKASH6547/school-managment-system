@@ -31,12 +31,12 @@ export function DashboardCharts({
   ].filter((d) => d.value > 0);
 
   return (
-    <div className="mt-8 grid gap-6 lg:grid-cols-2">
+    <div className="mt-8 grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="bg-primary-600 px-4 py-3">
-          <h2 className="text-lg font-semibold text-white">Class Strength</h2>
+        <div className="bg-primary-600 px-3 py-2 sm:px-4 sm:py-3">
+          <h2 className="text-base sm:text-lg font-semibold text-white">Class Strength</h2>
         </div>
-        <div className="p-4 h-80">
+        <div className="p-2 sm:p-4 h-64 sm:h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={classStrength.length ? classStrength : [{ name: "No data", strength: 0 }]}
@@ -52,10 +52,10 @@ export function DashboardCharts({
         </div>
       </div>
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="bg-[#2563eb] px-4 py-3">
-          <h2 className="text-lg font-semibold text-white">Gender Ratio</h2>
+        <div className="bg-[#2563eb] px-3 py-2 sm:px-4 sm:py-3">
+          <h2 className="text-base sm:text-lg font-semibold text-white">Gender Ratio</h2>
         </div>
-        <div className="p-4 h-80">
+        <div className="p-2 sm:p-4 h-64 sm:h-80">
           {genderData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -63,8 +63,8 @@ export function DashboardCharts({
                   data={genderData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
+                  innerRadius={40}
+                  outerRadius={80}
                   paddingAngle={2}
                   dataKey="value"
                   nameKey="name"

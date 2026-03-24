@@ -15,23 +15,23 @@ export function DashboardFilters() {
   }
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-3">
+    <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
       <select
-        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+        className="w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-2 py-2 sm:px-3 text-xs sm:text-sm text-slate-700 shadow-sm"
         defaultValue=""
         onChange={(e) => updateFilter("class", e.target.value)}
       >
         <option value="">All Classes</option>
       </select>
       <select
-        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+        className="w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-2 py-2 sm:px-3 text-xs sm:text-sm text-slate-700 shadow-sm"
         defaultValue=""
         onChange={(e) => updateFilter("section", e.target.value)}
       >
         <option value="">All Sections</option>
       </select>
       <select
-        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+        className="w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-2 py-2 sm:px-3 text-xs sm:text-sm text-slate-700 shadow-sm"
         defaultValue=""
         onChange={(e) => updateFilter("gender", e.target.value)}
       >
@@ -40,7 +40,7 @@ export function DashboardFilters() {
         <option value="female">Female</option>
       </select>
       <select
-        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+        className="w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-2 py-2 sm:px-3 text-xs sm:text-sm text-slate-700 shadow-sm"
         defaultValue=""
         onChange={(e) => updateFilter("status", e.target.value)}
       >
@@ -52,7 +52,7 @@ export function DashboardFilters() {
         type="month"
         value={month}
         onChange={(e) => updateFilter("month", e.target.value)}
-        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+        className="w-full sm:w-auto rounded-lg border border-slate-300 bg-white px-2 py-2 sm:px-3 text-xs sm:text-sm text-slate-700 shadow-sm"
       />
     </div>
   );
