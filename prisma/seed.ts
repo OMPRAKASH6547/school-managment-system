@@ -3,21 +3,34 @@ import * as bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const hash = await bcrypt.hash("admin123", 10);
+/** Change these if you want different local credentials, then run `npm run db:seed`. */
+const SUPER_ADMIN_EMAIL = "superadmin@schoolsaas.com";
+const SUPER_ADMIN_PASSWORD = "admin123";
 
-  // Super Admin
-  await prisma.user.upsert({
-    where: { email: "superadmin@schoolsaas.com" },
-    update: {},
-    create: {
-      email: "superadmin@schoolsaas.com",
-      passwordHash: hash,
-      name: "Super Admin",
-      role: "super_admin",
-      isActive: true,
-    },
+async function main() {
+  const hash = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 10);
+
+  // Super Admin (platform user — no organizationId)
+  const existingSuperAdmin = await prisma.user.findUnique({
+    where: { email: SUPER_ADMIN_EMAIL },
   });
+
+  if (existingSuperAdmin) {
+    await prisma.user.update({
+      where: { id: existingSuperAdmin.id },
+      data: { passwordHash: hash, role: "super_admin", isActive: true },
+    });
+  } else {
+    await prisma.user.create({
+      data: {
+        email: SUPER_ADMIN_EMAIL,
+        passwordHash: hash,
+        name: "Super Admin",
+        role: "super_admin",
+        isActive: true,
+      },
+    });
+  }
 
   // Subscription plans
   const plans = [
@@ -27,14 +40,23 @@ async function main() {
   ];
 
   for (const p of plans) {
-    await prisma.subscriptionPlan.upsert({
+    const existingPlan = await prisma.subscriptionPlan.findUnique({
       where: { slug: p.slug },
-      update: {},
-      create: p,
     });
+
+    if (existingPlan) {
+      await prisma.subscriptionPlan.update({
+        where: { id: existingPlan.id },
+        data: p,
+      });
+    } else {
+      await prisma.subscriptionPlan.create({ data: p });
+    }
   }
 
-  console.log("Seed completed: Super admin (superadmin@schoolsaas.com / admin123) and plans created.");
+  console.log(
+    `Seed completed: Super admin (${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}) and plans created.`,
+  );
 }
 
 main()

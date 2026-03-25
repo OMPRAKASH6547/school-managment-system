@@ -54,6 +54,9 @@ export function StaffForm({ staff }: { staff?: Staff | null }) {
         setError(data.error || "Failed");
         return;
       }
+      if (!staff && data.password) {
+        alert(`Login password for ${data.email ?? form.email}: ${data.password}`);
+      }
       router.push("/school/staff");
       router.refresh();
     } catch {

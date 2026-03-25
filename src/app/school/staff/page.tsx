@@ -1,14 +1,52 @@
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { TeacherAssignClassForm } from "@/app/components/TeacherAssignClassForm";
+import { redirect } from "next/navigation";
 
 export default async function SchoolStaffPage() {
   const session = await getSession();
+  if (session?.role === "teacher") redirect("/school/teacher");
+  if (session?.role === "staff") redirect("/school/staff-attendance");
+  if (session?.role === "accountant") redirect("/school");
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
+
+  const isSchoolAdmin = session?.role === "school_admin" || session?.role === "admin";
+
   const staff = await prisma.staff.findMany({
-    where: { organizationId: orgId },
+    where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
+
+  const teacherIds = staff.filter((s) => s.role === "teacher").map((t) => t.id);
+
+  const [classes, assignments] = await Promise.all([
+    isSchoolAdmin && branchId
+      ? prisma.class.findMany({
+          where: { organizationId: orgId, branchId, status: "active" },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    isSchoolAdmin && branchId && teacherIds.length > 0
+      ? prisma.teacherAssignment.findMany({
+          where: {
+            organizationId: orgId,
+            branchId,
+            teacherStaffId: { in: teacherIds },
+          },
+          select: { teacherStaffId: true, classId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const classNameById = new Map(classes.map((c) => [c.id, c.name]));
+  const assignedByTeacher = new Map<string, string[]>();
+  for (const a of assignments) {
+    const prev = assignedByTeacher.get(a.teacherStaffId) ?? [];
+    assignedByTeacher.set(a.teacherStaffId, [...prev, a.classId]);
+  }
 
   return (
     <>
@@ -52,6 +90,21 @@ export default async function SchoolStaffPage() {
                       <Link href={`/school/staff/${s.id}`} className="text-sm text-primary-600 hover:underline">
                         Edit
                       </Link>
+                    {isSchoolAdmin && s.role === "teacher" && branchId && (
+                      <div className="mt-2">
+                        <div className="text-xs text-slate-500">
+                          Assigned:{" "}
+                          {(assignedByTeacher.get(s.id) ?? []).length === 0
+                            ? "—"
+                            : (assignedByTeacher.get(s.id) ?? []).map((cid) => classNameById.get(cid)).filter(Boolean).join(", ")}
+                        </div>
+                        <TeacherAssignClassForm
+                          teacherStaffId={s.id}
+                          classes={classes}
+                          assignedClassIds={assignedByTeacher.get(s.id) ?? []}
+                        />
+                      </div>
+                    )}
                     </td>
                   </tr>
                 ))}

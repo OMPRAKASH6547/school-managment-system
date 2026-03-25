@@ -10,9 +10,11 @@ type Result = { studentId: string; subjectId: string; marksObtained: number };
 export function MarksEntryForm({
   exam,
   students,
+  canPublish,
 }: {
   exam: { id: string; status: string; subjects: Subject[] };
   students: Student[];
+  canPublish: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -155,7 +157,7 @@ export function MarksEntryForm({
         <button type="button" onClick={handleSave} disabled={loading} className="btn-primary">
           {loading ? "Saving..." : "Save marks"}
         </button>
-        {exam.status !== "published" && (
+        {canPublish && exam.status !== "published" && (
           <button type="button" onClick={handlePublish} disabled={publishing} className="rounded-lg bg-school-green px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
             {publishing ? "Publishing..." : "Publish results"}
           </button>

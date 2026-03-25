@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ExamForm } from "@/app/components/ExamForm";
 
 export default async function NewExamPage() {
   const session = await getSession();
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
   const classes = await prisma.class.findMany({
-    where: { organizationId: orgId, status: "active" },
+    where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
     orderBy: { name: "asc" },
   });
 

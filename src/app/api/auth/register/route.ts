@@ -23,6 +23,10 @@ function slugify(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function genCode(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -43,6 +47,18 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await hashPassword(data.password);
 
+    // Generate a unique `schoolCode` at registration (used by public `/result` flow).
+    let schoolCode: string | null = null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = genCode("SCH");
+      const exists = await prisma.organization.findFirst({ where: { schoolCode: candidate } });
+      if (!exists) {
+        schoolCode = candidate;
+        break;
+      }
+    }
+    if (!schoolCode) schoolCode = `SCH-${Date.now()}`;
+
     const org = await prisma.organization.create({
       data: {
         name: data.orgName,
@@ -54,6 +70,7 @@ export async function POST(req: NextRequest) {
         city: data.city ?? null,
         country: "India",
         status: "pending",
+        schoolCode,
       },
     });
 
@@ -72,6 +89,18 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    }
+    if (e instanceof Error) {
+      if (e.message.includes("replica set")) {
+        return NextResponse.json(
+          {
+            error:
+              "MongoDB must be configured as a replica set for this app. (Prisma transaction requirement.)",
+          },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ error: e.message }, { status: 500 });
     }
     return NextResponse.json({ error: "Registration failed" }, { status: 500 });
   }

@@ -1,30 +1,34 @@
-import { getSession } from "@/lib/auth";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { RecordPaymentForm } from "@/app/components/RecordPaymentForm";
 import { CreateFeePlanForm } from "@/app/components/CreateFeePlanForm";
 import { FeeReceiptDownload } from "@/app/components/FeeReceiptDownload";
 import { VerifyPaymentButton } from "@/app/components/VerifyPaymentButton";
+import { redirect } from "next/navigation";
 
 export default async function SchoolFeesPage() {
   const session = await getSession();
+  if (session?.role === "teacher") redirect("/school/teacher");
+  if (session?.role === "staff") redirect("/school/staff-attendance");
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
   const [feePlans, recentPayments, students, classes] = await Promise.all([
     prisma.feePlan.findMany({
-      where: { organizationId: orgId, isActive: true },
+      where: branchId ? { organizationId: orgId, branchId, isActive: true } : { organizationId: orgId, isActive: true },
       orderBy: { name: "asc" },
     }),
     prisma.payment.findMany({
-      where: { organizationId: orgId },
+      where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
       orderBy: { paidAt: "desc" },
       take: 20,
       include: { student: true },
     }),
     prisma.student.findMany({
-      where: { organizationId: orgId, status: "active" },
+      where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     }),
     prisma.class.findMany({
-      where: { organizationId: orgId, status: "active" },
+      where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
       orderBy: { name: "asc" },
     }),
   ]);

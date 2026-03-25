@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export default async function ExamResultsLinksPage({
@@ -9,10 +9,13 @@ export default async function ExamResultsLinksPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await getSession();
+    if (!session) redirect("/login");
+  if (session.role !== "school_admin" && session.role !== "admin") redirect("/school/examinations");
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
   const { id } = await params;
   const exam = await prisma.exam.findFirst({
-    where: { id, organizationId: orgId },
+    where: branchId ? { id, organizationId: orgId, branchId } : { id, organizationId: orgId },
   });
   if (!exam) notFound();
 
@@ -25,6 +28,7 @@ export default async function ExamResultsLinksPage({
   const students = await prisma.student.findMany({
     where: {
       organizationId: orgId,
+      ...(branchId ? { branchId } : {}),
       ...(exam.classId ? { classId: exam.classId } : {}),
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],

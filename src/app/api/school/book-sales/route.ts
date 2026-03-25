@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { requireSchoolAdmin, requireOrganization } from "@/lib/auth";
+import { getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
   organizationId: z.string(),
@@ -14,9 +15,10 @@ const bodySchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    requireSchoolAdmin(session);
+    requirePermission(session, "books", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
+    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
     const data = bodySchema.parse(await req.json());
     if (data.organizationId !== orgId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
     const saleItems: { productId: string; quantity: number; unitPrice: number; amount: number }[] = [];
     for (const item of data.items) {
       const product = await prisma.bookProduct.findFirst({
-        where: { id: item.productId, organizationId: orgId },
+        where: { id: item.productId, organizationId: orgId, branchId },
       });
       if (!product) continue;
       const amount = product.price * item.quantity;
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
     await prisma.bookSale.create({
       data: {
         organizationId: orgId,
+        branchId,
         invoiceNo,
         totalAmount,
         customerName: data.customerName ?? null,
@@ -54,6 +57,8 @@ export async function POST(req: NextRequest) {
             quantity: i.quantity,
             unitPrice: i.unitPrice,
             amount: i.amount,
+            organizationId: orgId,
+            branchId,
           })),
         },
       },
@@ -69,6 +74,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    if (e instanceof Error && e.message.includes("Unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

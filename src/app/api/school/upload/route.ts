@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { requireSchoolAdmin, requireOrganization } from "@/lib/auth";
+import { getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { requirePermission } from "@/lib/permissions";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    requireSchoolAdmin(session);
+    requirePermission(session, "upload", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
+    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
 
     const formData = await req.formData();
     const type = formData.get("type") as string; // "logo" | "student"
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     if (type === "student" && studentId) {
       const student = await prisma.student.findFirst({
-        where: { id: studentId, organizationId: orgId },
+        where: { id: studentId, organizationId: orgId, branchId },
       });
       if (!student) return NextResponse.json({ error: "Student not found" }, { status: 404 });
       const dir = path.join(process.cwd(), "public", "uploads", "students");
@@ -51,8 +53,8 @@ export async function POST(req: NextRequest) {
       const filepath = path.join(dir, filename);
       await writeFile(filepath, buffer);
       const url = `/uploads/students/${filename}`;
-      await prisma.student.update({
-        where: { id: studentId },
+      await prisma.student.updateMany({
+        where: { id: studentId, organizationId: orgId, branchId },
         data: { image: url },
       });
       return NextResponse.json({ url });
@@ -61,6 +63,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid type or missing studentId" }, { status: 400 });
   } catch (e) {
     console.error(e);
+    if (e instanceof Error && e.message.includes("Unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
 }

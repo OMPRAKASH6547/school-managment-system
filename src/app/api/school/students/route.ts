@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { requireSchoolAdmin, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
   organizationId: z.string(),
@@ -23,7 +23,7 @@ const bodySchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    requireSchoolAdmin(session);
+    requirePermission(session, "students", "write");
     requireOrganization(session);
     const body = await req.json();
     const data = bodySchema.parse(body);
@@ -31,9 +31,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const branchId = await requireBranchAccess(session.organizationId!, await getSelectedBranchId());
+
     await prisma.student.create({
       data: {
         organizationId: data.organizationId,
+        branchId,
         rollNo: data.rollNo || null,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -52,6 +55,9 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    }
+    if (e instanceof Error && e.message.includes("Unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

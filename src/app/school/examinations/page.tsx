@@ -1,15 +1,46 @@
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export default async function ExaminationsPage() {
   const session = await getSession();
   const orgId = session?.organizationId!;
-  const exams = await prisma.exam.findMany({
-    where: { organizationId: orgId },
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { results: true } }, subjects: true },
-  });
+  const branchId = await getSelectedBranchId();
+
+  let exams;
+  if (session?.role === "staff") redirect("/school/staff-attendance");
+  if (session?.role === "accountant") redirect("/school");
+  if (session?.role === "teacher") {
+    if (!branchId) return [];
+    const teacherStaff = await prisma.staff.findFirst({
+      where: { email: session.email, organizationId: orgId, branchId, role: "teacher" },
+      select: { id: true },
+    });
+    if (!teacherStaff) return notFound();
+
+    const assigned = await prisma.teacherAssignment.findMany({
+      where: { teacherStaffId: teacherStaff.id, organizationId: orgId, branchId },
+      select: { classId: true },
+    });
+    const classIds = assigned.map((a) => a.classId);
+
+    if (classIds.length === 0) {
+      exams = [];
+    } else {
+      exams = await prisma.exam.findMany({
+        where: { organizationId: orgId, branchId, classId: { in: classIds } },
+        orderBy: { createdAt: "desc" },
+        include: { _count: { select: { results: true } }, subjects: true },
+      });
+    }
+  } else {
+    exams = await prisma.exam.findMany({
+      where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { results: true } }, subjects: true },
+    });
+  }
 
   return (
     <>

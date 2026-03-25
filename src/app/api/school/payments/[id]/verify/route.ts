@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { requireSchoolAdmin, requireOrganization } from "@/lib/auth";
+import { getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { requirePermission } from "@/lib/permissions";
 
 export async function POST(
   _req: Request,
@@ -9,12 +10,13 @@ export async function POST(
 ) {
   try {
     const session = await getSession();
-    requireSchoolAdmin(session);
+    requirePermission(session, "fees.verify", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
+    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
     const { id } = await params;
     const payment = await prisma.payment.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId, branchId },
     });
     if (!payment) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     if (payment.verifiedAt) {
@@ -29,7 +31,10 @@ export async function POST(
       },
     });
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("Unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

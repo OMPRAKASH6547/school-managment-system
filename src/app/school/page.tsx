@@ -1,12 +1,16 @@
-import { getSession } from "@/lib/auth";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { DashboardFilters } from "@/app/components/DashboardFilters";
 import { DashboardKPIs } from "@/app/components/DashboardKPIs";
 import { DashboardCharts } from "@/app/components/DashboardCharts";
+import { redirect } from "next/navigation";
 
 export default async function SchoolDashboard() {
   const session = await getSession();
+  if (session?.role === "teacher") redirect("/school/teacher");
+  if (session?.role === "staff") redirect("/school/staff-attendance");
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
 
   const [
     students,
@@ -16,19 +20,21 @@ export default async function SchoolDashboard() {
     subscription,
   ] = await Promise.all([
     prisma.student.findMany({
-      where: { organizationId: orgId },
+      where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
       select: { id: true, gender: true, status: true, classId: true },
     }),
     prisma.class.findMany({
-      where: { organizationId: orgId, status: "active" },
+      where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
       include: { _count: { select: { students: true } } },
     }),
     prisma.payment.findMany({
-      where: { organizationId: orgId, status: { in: ["verified", "completed"] } },
+      where: branchId
+        ? { organizationId: orgId, branchId, status: { in: ["verified", "completed"] } }
+        : { organizationId: orgId, status: { in: ["verified", "completed"] } },
       select: { amount: true },
     }),
     prisma.bookSale.findMany({
-      where: { organizationId: orgId },
+      where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
       include: { items: true },
     }),
     prisma.subscription.findUnique({

@@ -1,18 +1,22 @@
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { RecordBookSaleForm } from "@/app/components/RecordBookSaleForm";
+import { redirect } from "next/navigation";
 
 export default async function BooksPage() {
   const session = await getSession();
+  if (session?.role === "teacher") redirect("/school/teacher");
+  if (session?.role === "staff") redirect("/school/staff-attendance");
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
   const [products, recentSales] = await Promise.all([
     prisma.bookProduct.findMany({
-      where: { organizationId: orgId, status: "active" },
+      where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
       orderBy: { name: "asc" },
     }),
     prisma.bookSale.findMany({
-      where: { organizationId: orgId },
+      where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
       orderBy: { soldAt: "desc" },
       take: 15,
       include: { items: { include: { product: true } } },

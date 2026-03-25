@@ -1,12 +1,17 @@
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { redirect } from "next/navigation";
 
 export default async function SchoolStudentsPage() {
   const session = await getSession();
+  if (session?.role === "teacher") redirect("/school/teacher");
+  if (session?.role === "staff") redirect("/school/staff-attendance");
+  if (session?.role === "accountant") redirect("/school");
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
   const students = await prisma.student.findMany({
-    where: { organizationId: orgId },
+    where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     include: { class: true },
   });

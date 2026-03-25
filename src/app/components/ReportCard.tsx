@@ -5,6 +5,7 @@ import {
     Text,
     View,
     StyleSheet,
+    Image,
 } from "@react-pdf/renderer";
 
 type Subject = {
@@ -25,6 +26,7 @@ type Props = {
     rollNo?: string | null;
     className?: string | null;
     exams: Exam[];
+    qrDataUrl?: string;
 };
 
 const styles = StyleSheet.create({
@@ -33,6 +35,21 @@ const styles = StyleSheet.create({
     section: { marginBottom: 12 },
     row: { flexDirection: "row", justifyContent: "space-between" },
     table: { marginTop: 6 },
+    footer: {
+      marginTop: 18,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+    },
+    qr: {
+      width: 90,
+      height: 90,
+    },
+    footerText: {
+      fontSize: 9,
+      color: "#64748b",
+      maxWidth: 140,
+    },
 });
 
 const ReportCard: React.FC<Props> = ({
@@ -41,6 +58,7 @@ const ReportCard: React.FC<Props> = ({
     rollNo,
     className,
     exams,
+    qrDataUrl,
 }) => {
     return (
         <Document>
@@ -92,6 +110,13 @@ const ReportCard: React.FC<Props> = ({
                         </View>
                     );
                 })}
+
+                {qrDataUrl ? (
+                  <View style={styles.footer}>
+                    <Text style={styles.footerText}>Scan QR to verify this score card.</Text>
+                    <Image src={qrDataUrl} style={styles.qr} />
+                  </View>
+                ) : null}
             </Page>
         </Document>
     );

@@ -4,7 +4,11 @@ import type { SessionUser } from "@/types";
 import * as bcrypt from "bcryptjs";
 
 const SESSION_COOKIE = "school_saas_session";
+const BRANCH_COOKIE = "school_saas_branch";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const COOKIES_SECURE =
+  (process.env.NEXTAUTH_URL ?? "").startsWith("https://") ||
+  (process.env.NEXT_PUBLIC_BASE_URL ?? "").startsWith("https://");
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -24,14 +28,14 @@ export async function createSession(userId: string): Promise<string> {
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role as "super_admin" | "school_admin",
+    role: user.role as SessionUser["role"],
     organizationId: user.organizationId,
   };
   const token = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: COOKIES_SECURE,
     sameSite: "lax",
     maxAge: SESSION_MAX_AGE,
     path: "/",
@@ -72,4 +76,33 @@ export function requireSchoolAdmin(session: SessionUser | null): asserts session
 
 export function requireOrganization(session: SessionUser | null): asserts session is SessionUser {
   if (!session?.organizationId) throw new Error("No organization assigned");
+}
+
+export async function setSelectedBranch(branchId: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(BRANCH_COOKIE, branchId, {
+    httpOnly: true,
+    secure: COOKIES_SECURE,
+    sameSite: "lax",
+    maxAge: SESSION_MAX_AGE,
+    path: "/",
+  });
+}
+
+export async function getSelectedBranchId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(BRANCH_COOKIE)?.value ?? null;
+}
+
+export async function requireBranchAccess(
+  organizationId: string,
+  branchId: string | null | undefined
+): Promise<string> {
+  if (!branchId) throw new Error("No branch selected");
+  const branch = await prisma.branch.findFirst({
+    where: { id: branchId, organizationId },
+    select: { id: true },
+  });
+  if (!branch) throw new Error("Invalid branch for organization");
+  return branch.id;
 }

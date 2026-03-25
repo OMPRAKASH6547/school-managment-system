@@ -4,15 +4,17 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
 // ============ CORE: Organizations (Schools/Coaching) ============
 model Organization {
-  id          String   @id @default(cuid())
+  id          String   @id @default(cuid()) @map("_id")
   name        String
   slug        String   @unique
+  // Unique per school (we will start generating/populating this in the app logic)
+  schoolCode  String?
   type        String   // "school" | "coaching"
   email       String
   phone       String?
@@ -40,12 +42,32 @@ model Organization {
   hostelRooms     HostelRoom[]
   bookProducts    BookProduct[]
   bookSales       BookSale[]
+
+  branches        Branch[]
+}
+
+// ============ BRANCHES (Tenant sub-division) ============
+// A single school (Organization) can have multiple branches.
+// We keep `branchId` as a scalar on all tenant tables for now, then will enforce filtering/middleware in API/routes.
+model Branch {
+  id          String   @id @default(cuid()) @map("_id")
+  organizationId String // schoolId
+
+  name        String
+  address     String?
+  contact     String?
+
+  branchCode  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
 }
 
 // ============ AUTH & USERS ============
 // Role: super_admin | school_admin | staff | teacher | student | parent
 model User {
-  id            String    @id @default(cuid())
+  id            String    @id @default(cuid()) @map("_id")
   email         String    @unique
   passwordHash  String
   name          String
@@ -58,12 +80,12 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
 }
 
 // ============ SUBSCRIPTION ============
 model SubscriptionPlan {
-  id          String   @id @default(cuid())
+  id          String   @id @default(cuid()) @map("_id")
   name        String   // Basic, Pro, Enterprise
   slug        String   @unique
   description String?
@@ -79,7 +101,7 @@ model SubscriptionPlan {
 }
 
 model Subscription {
-  id                String   @id @default(cuid())
+  id                String   @id @default(cuid()) @map("_id")
   organizationId    String   @unique
   planId            String
   status            String   @default("active") // active | cancelled | expired | past_due
@@ -90,14 +112,15 @@ model Subscription {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id])
   plan         SubscriptionPlan  @relation(fields: [planId], references: [id])
 }
 
 // ============ SCHOOL DATA ============
 model Student {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   rollNo         String?
   firstName      String
   lastName       String
@@ -115,16 +138,17 @@ model Student {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  class          Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  class          Class?       @relation(fields: [classId], references: [id])
   attendances    Attendance[]
   feePayments    Payment[]
   examResults    ExamResult[]
 }
 
 model Staff {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   employeeId     String?
   firstName      String
   lastName       String
@@ -138,13 +162,14 @@ model Staff {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?   @relation(fields: [organizationId], references: [id])
   staffAttendances StaffAttendance[]
 }
 
 model Class {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   name           String   // e.g. "Class 10-A", "JEE Batch 1"
   section        String?
   academicYear   String?
@@ -154,13 +179,14 @@ model Class {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
   students     Student[]
 }
 
 model FeePlan {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   name           String   // e.g. "Monthly Tuition", "Annual Fee"
   amount         Float
   frequency      String   // one_time | monthly | quarterly | yearly
@@ -170,12 +196,13 @@ model FeePlan {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
 }
 
 model Payment {
-  id             String    @id @default(cuid())
+  id             String    @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   studentId      String
   amount         Float
   paidAt         DateTime  @default(now())
@@ -189,28 +216,31 @@ model Payment {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  student      Student?     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  student      Student?     @relation(fields: [studentId], references: [id])
 }
 
 model Attendance {
-  id         String   @id @default(cuid())
+  id         String   @id @default(cuid()) @map("_id")
+  organizationId String?
   studentId String
+  branchId  String?
   date       DateTime
   status     String   // present | absent | late | leave
   remarks    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  student Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id])
 
   @@unique([studentId, date])
 }
 
 // ============ EXAMINATIONS & RESULTS ============
 model Exam {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   name           String   // e.g. "Half Yearly 2024-25"
   examType       String   // mid_term | final | unit_test
   classId        String?
@@ -221,58 +251,97 @@ model Exam {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
   subjects      ExamSubject[]
   results       ExamResult[]
 }
 
 model ExamSubject {
-  id       String @id @default(cuid())
+  id       String @id @default(cuid()) @map("_id")
   examId   String
+  organizationId String?
+  branchId String?
   name     String   // e.g. "Mathematics", "English"
   maxMarks Float
   order   Int      @default(0)
 
-  exam    Exam?    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  exam    Exam?    @relation(fields: [examId], references: [id])
   results ExamResult[]
 }
 
 model ExamResult {
-  id            String   @id @default(cuid())
+  id            String   @id @default(cuid()) @map("_id")
   examId        String
   studentId     String
   subjectId     String
+  organizationId String?
+  branchId       String?
   marksObtained Float
   remarks       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  exam    Exam?         @relation(fields: [examId], references: [id], onDelete: Cascade)
-  student Student?      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject ExamSubject?  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  exam    Exam?         @relation(fields: [examId], references: [id])
+  student Student?      @relation(fields: [studentId], references: [id])
+  subject ExamSubject?  @relation(fields: [subjectId], references: [id])
 
   @@unique([examId, studentId, subjectId])
 }
 
+// ============ TEACHER WORKFLOW ============
+// Assign teachers (staff with role "teacher") to classes inside a branch.
+// Teachers can then enter marks only for assigned classes.
+model TeacherAssignment {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String
+  teacherStaffId String
+  classId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([teacherStaffId, classId, branchId])
+}
+
+// Teacher class tracking (start/end time per class session)
+model TeacherClassSession {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String
+  teacherStaffId String
+  classId        String
+
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherStaffId, classId, startedAt])
+}
+
 // ============ STAFF ATTENDANCE ============
 model StaffAttendance {
-  id         String   @id @default(cuid())
+  id         String   @id @default(cuid()) @map("_id")
+  organizationId String?
   staffId    String
+  branchId    String?
   date       DateTime
   status     String   // present | absent | late | leave
   remarks    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  staff Staff? @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staff Staff? @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, date])
 }
 
 // ============ LIBRARY ============
 model LibraryBook {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   title          String
   author         String?
   isbn           String?
@@ -283,26 +352,29 @@ model LibraryBook {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
   issues        LibraryIssue[]
 }
 
 model LibraryIssue {
-  id         String    @id @default(cuid())
+  id         String    @id @default(cuid()) @map("_id")
   bookId     String
   studentId  String?   // or staff
+  organizationId String?
+  branchId       String?
   issuedAt   DateTime  @default(now())
   dueDate    DateTime?
   returnedAt DateTime?
   status     String    @default("issued") // issued | returned | overdue
 
-  book LibraryBook? @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  book LibraryBook? @relation(fields: [bookId], references: [id])
 }
 
 // ============ HOSTEL ============
 model HostelRoom {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   name           String   // e.g. "Block A-101"
   capacity       Int      @default(1)
   currentOccupancy Int    @default(0)
@@ -312,25 +384,28 @@ model HostelRoom {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?     @relation(fields: [organizationId], references: [id])
   allocations  HostelAllocation[]
 }
 
 model HostelAllocation {
-  id        String    @id @default(cuid())
+  id        String    @id @default(cuid()) @map("_id")
   roomId    String
   studentId String
+  organizationId String?
+  branchId       String?
   fromDate  DateTime  @default(now())
   toDate    DateTime?
   status    String    @default("active")
 
-  room HostelRoom? @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  room HostelRoom? @relation(fields: [roomId], references: [id])
 }
 
 // ============ BOOK SELLING ============
 model BookProduct {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   name           String   // e.g. "Notebook", "Physics Book"
   sku            String?
   price          Float
@@ -340,13 +415,14 @@ model BookProduct {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
   sales         BookSaleItem[]
 }
 
 model BookSale {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   organizationId String
+  branchId       String?
   invoiceNo      String?
   soldAt         DateTime @default(now())
   totalAmount    Float
@@ -356,18 +432,20 @@ model BookSale {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
   items         BookSaleItem[]
 }
 
 model BookSaleItem {
-  id        String   @id @default(cuid())
+  id        String   @id @default(cuid()) @map("_id")
   saleId    String
   productId String
+  organizationId String?
+  branchId       String?
   quantity  Int
   unitPrice Float
   amount    Float
 
-  sale    BookSale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product BookProduct?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sale    BookSale?     @relation(fields: [saleId], references: [id])
+  product BookProduct?  @relation(fields: [productId], references: [id])
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -16,6 +17,11 @@ interface SchoolLayoutProps {
   schoolLogo: string | null;
   website: string | null;
   userName: string;
+  role: string;
+  branches: { id: string; name: string; branchCode: string }[];
+  selectedBranchId: string | null;
+  /** When true, layout defaulted a branch but could not set the httpOnly cookie — sync via API once. */
+  needsBranchCookie?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -25,6 +31,7 @@ const navItems: NavItem[] = [
   { href: "/school/classes", label: "Classes & Subjects" },
   { href: "/school/examinations", label: "Examinations" },
   { href: "/school/attendance", label: "Attendance" },
+  { href: "/school/teacher", label: "Teacher Dashboard" },
   { href: "/school/staff-attendance", label: "Staff Attendance" },
   { href: "/school/fees", label: "Fee Management" },
   { href: "/school/library", label: "Library" },
@@ -39,15 +46,89 @@ export function SchoolLayout({
   schoolLogo,
   website,
   userName,
+  role,
+  branches,
+  selectedBranchId,
+  needsBranchCookie = false,
 }: SchoolLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const branchCookieSynced = useRef(false);
+
+  const [branchLoading, setBranchLoading] = useState(false);
+  const [activeBranchId, setActiveBranchId] = useState(selectedBranchId ?? null);
+
+  useEffect(() => {
+    setActiveBranchId(selectedBranchId ?? null);
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    if (!needsBranchCookie || !selectedBranchId || branchCookieSynced.current) return;
+    branchCookieSynced.current = true;
+    fetch("/api/school/select-branch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ branchId: selectedBranchId }),
+    })
+      .then((res) => {
+        if (res.ok) router.refresh();
+        else branchCookieSynced.current = false;
+      })
+      .catch(() => {
+        branchCookieSynced.current = false;
+      });
+  }, [needsBranchCookie, selectedBranchId, router]);
+
+  async function handleSelectBranch(nextBranchId: string) {
+    if (!nextBranchId || nextBranchId === activeBranchId) return;
+    try {
+      setBranchLoading(true);
+      const res = await fetch("/api/school/select-branch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: nextBranchId }),
+      });
+      if (!res.ok) return;
+      setActiveBranchId(nextBranchId);
+      router.refresh();
+    } finally {
+      setBranchLoading(false);
+    }
+  }
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
     router.refresh();
   }
+
+  const allowedHrefs = (() => {
+    if (role === "teacher") {
+      return new Set<string>([
+        "/school/teacher",
+        "/school/attendance",
+        "/school/examinations",
+      ]);
+    }
+    if (role === "accountant") {
+      return new Set<string>([
+        "/school",
+        "/school/fees",
+        "/school/books",
+        "/school/staff-attendance",
+      ]);
+    }
+    if (role === "admin") {
+      return new Set<string>(navItems.map((i) => i.href));
+    }
+    if (role === "staff") {
+      return new Set<string>([
+        "/school",
+        "/school/staff-attendance",
+      ]);
+    }
+    return new Set<string>(navItems.map((i) => i.href));
+  })();
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -67,6 +148,24 @@ export function SchoolLayout({
             <span className="text-lg font-bold text-school-navy max-w-[200px] truncate lg:max-w-none">
               {schoolName}
             </span>
+
+            {branches.length > 1 && (
+              <div className="hidden md:flex items-center gap-2">
+                <select
+                  value={activeBranchId ?? ""}
+                  onChange={(e) => handleSelectBranch(e.target.value)}
+                  disabled={branchLoading}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                  aria-label="Select branch"
+                >
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -119,25 +218,27 @@ export function SchoolLayout({
         {/* Left sidebar - dark grey */}
         <aside className="fixed left-0 top-16 z-20 h-[calc(100vh-4rem)] w-64 shrink-0 border-r border-slate-700 bg-school-dark">
           <nav className="flex flex-col gap-0.5 p-3">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-white transition ${
-                    isActive
-                      ? "bg-primary-600 text-white"
-                      : "text-slate-300 hover:bg-slate-700 hover:text-white"
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  <svg className="h-4 w-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
-              );
-            })}
+            {navItems
+              .filter((item) => allowedHrefs.has(item.href))
+              .map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-white transition ${
+                      isActive
+                        ? "bg-primary-600 text-white"
+                        : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    <svg className="h-4 w-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                );
+              })}
           </nav>
         </aside>
 

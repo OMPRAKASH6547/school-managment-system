@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { requireSchoolAdmin, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
@@ -10,15 +9,40 @@ export async function GET(
 ) {
   try {
     const session = await getSession();
-    requireSchoolAdmin(session);
     requireOrganization(session);
     const { id } = await params;
+    const branchId = await requireBranchAccess(session.organizationId!, await getSelectedBranchId());
+    if (session.role !== "school_admin" && session.role !== "admin" && session.role !== "teacher") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
     const exam = await prisma.exam.findFirst({
-      where: { id, organizationId: session.organizationId! },
+      where: { id, organizationId: session.organizationId!, branchId },
     });
     if (!exam) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Teachers can only view marks for assigned classes.
+    if (session.role === "teacher") {
+      if (!exam.classId) return NextResponse.json({ error: "Exam has no class" }, { status: 400 });
+      const teacherStaff = await prisma.staff.findFirst({
+        where: { email: session.email, organizationId: session.organizationId!, branchId },
+        select: { id: true, role: true },
+      });
+      if (!teacherStaff || teacherStaff.role !== "teacher") {
+        return NextResponse.json({ error: "Teacher not found" }, { status: 403 });
+      }
+      const assignment = await prisma.teacherAssignment.findFirst({
+        where: {
+          teacherStaffId: teacherStaff.id,
+          classId: exam.classId,
+          organizationId: session.organizationId!,
+          branchId,
+        },
+        select: { id: true },
+      });
+      if (!assignment) return NextResponse.json({ error: "Not assigned" }, { status: 403 });
+    }
     const results = await prisma.examResult.findMany({
-      where: { examId: id },
+      where: { examId: id, branchId },
       select: { studentId: true, subjectId: true, marksObtained: true },
     });
     return NextResponse.json({ results });
@@ -41,13 +65,38 @@ export async function POST(
 ) {
   try {
     const session = await getSession();
-    requireSchoolAdmin(session);
     requireOrganization(session);
     const { id: examId } = await params;
+    const branchId = await requireBranchAccess(session.organizationId!, await getSelectedBranchId());
+    if (session.role !== "school_admin" && session.role !== "admin" && session.role !== "teacher") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
     const exam = await prisma.exam.findFirst({
-      where: { id: examId, organizationId: session.organizationId! },
+      where: { id: examId, organizationId: session.organizationId!, branchId },
     });
     if (!exam) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Teachers can only enter marks for assigned classes.
+    if (session.role === "teacher") {
+      if (!exam.classId) return NextResponse.json({ error: "Exam has no class" }, { status: 400 });
+      const teacherStaff = await prisma.staff.findFirst({
+        where: { email: session.email, organizationId: session.organizationId!, branchId },
+        select: { id: true, role: true },
+      });
+      if (!teacherStaff || teacherStaff.role !== "teacher") {
+        return NextResponse.json({ error: "Teacher not found" }, { status: 403 });
+      }
+      const assignment = await prisma.teacherAssignment.findFirst({
+        where: {
+          teacherStaffId: teacherStaff.id,
+          classId: exam.classId,
+          organizationId: session.organizationId!,
+          branchId,
+        },
+        select: { id: true },
+      });
+      if (!assignment) return NextResponse.json({ error: "Not assigned" }, { status: 403 });
+    }
     const body = await req.json();
     const { entries } = bodySchema.parse(body);
 
@@ -62,6 +111,8 @@ export async function POST(
         },
         create: {
           examId,
+          organizationId: session.organizationId!,
+          branchId,
           studentId: e.studentId,
           subjectId: e.subjectId,
           marksObtained: e.marksObtained,

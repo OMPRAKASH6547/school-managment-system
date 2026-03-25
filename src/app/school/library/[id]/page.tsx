@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, getSelectedBranchId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export default async function LibraryBookDetailPage({
@@ -10,9 +10,10 @@ export default async function LibraryBookDetailPage({
 }) {
   const session = await getSession();
   const orgId = session?.organizationId!;
+  const branchId = await getSelectedBranchId();
   const { id } = await params;
   const book = await prisma.libraryBook.findFirst({
-    where: { id, organizationId: orgId },
+    where: branchId ? { id, organizationId: orgId, branchId } : { id, organizationId: orgId },
   });
   if (!book) notFound();
 

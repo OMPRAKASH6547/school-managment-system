@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { requireSchoolAdmin, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
   employeeId: z.string().optional(),
@@ -23,11 +23,12 @@ export async function POST(
 ) {
   try {
     const session = await getSession();
-    requireSchoolAdmin(session);
+    requirePermission(session, "staff", "write");
     requireOrganization(session);
+    const branchId = await requireBranchAccess(session.organizationId!, await getSelectedBranchId());
     const { id } = await params;
     const staff = await prisma.staff.findFirst({
-      where: { id, organizationId: session.organizationId! },
+      where: { id, organizationId: session.organizationId!, branchId },
     });
     if (!staff) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -53,10 +54,25 @@ export async function POST(
         status: data.status ?? staff.status,
       },
     });
+
+    // Keep login role in sync with staff role.
+    const userRole = data.role;
+    await prisma.user.updateMany({
+      where: { email: data.email, organizationId: session.organizationId!, isActive: true },
+      data: {
+        role: userRole,
+        name: `${data.firstName} ${data.lastName}`,
+        phone: data.phone ?? null,
+      },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    }
+    if (e instanceof Error && e.message.includes("Unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

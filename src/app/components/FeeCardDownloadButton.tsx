@@ -21,7 +21,9 @@ export function FeeCardDownloadButton({ paymentId, children }: FeeCardDownloadBu
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "fee-receipt.pdf";
+        const contentDisposition = res.headers.get("content-disposition");
+        const match = contentDisposition?.match(/filename="?([^"]+)"?/i);
+        a.download = match?.[1] ?? "fee-receipt.pdf";
         document.body.appendChild(a);
         a.click();
         a.remove();
