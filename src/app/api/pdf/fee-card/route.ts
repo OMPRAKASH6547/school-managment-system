@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import QRCode from "qrcode";
 import { pdf } from "@react-pdf/renderer";
+import { Readable } from "node:stream";
 import { prisma } from "@/lib/db";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createFeeCardDocument } from "@/lib/pdf/FeeCard";
 import { requirePermission } from "@/lib/permissions";
+
+async function nodeStreamToUint8Array(stream: Readable): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return new Uint8Array(Buffer.concat(chunks));
+}
 
 const bodySchema = z.object({
   paymentId: z.string().min(1),
@@ -95,9 +102,17 @@ export async function POST(req: NextRequest) {
       acceptedByName: acceptedByName ?? (payment.collectedBy ? `${payment.collectedBy.firstName} ${payment.collectedBy.lastName}` : null),
     });
 
-    const pdfBuffer = await pdf(doc).toBuffer();
+    const pdfOutput = await pdf(doc).toBuffer();
+    const pdfBytes =
+      pdfOutput instanceof Uint8Array
+        ? pdfOutput
+        : pdfOutput instanceof ArrayBuffer
+        ? new Uint8Array(pdfOutput)
+        : pdfOutput instanceof Readable
+        ? await nodeStreamToUint8Array(pdfOutput)
+        : new Uint8Array(Buffer.from(pdfOutput as unknown as ArrayBuffer));
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBytes, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,

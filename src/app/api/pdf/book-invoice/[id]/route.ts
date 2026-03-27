@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import QRCode from "qrcode";
 import { pdf } from "@react-pdf/renderer";
+import { Readable } from "node:stream";
 import { prisma } from "@/lib/db";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createInvoiceDocument } from "@/lib/pdf/BookInvoice";
 import { requirePermission } from "@/lib/permissions";
+
+async function nodeStreamToUint8Array(stream: Readable): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return new Uint8Array(Buffer.concat(chunks));
+}
 
 export async function GET(
   _req: NextRequest,
@@ -44,13 +51,21 @@ export async function GET(
     const qrImage = await QRCode.toDataURL(verificationUrl);
 
     const doc = createInvoiceDocument(sale, org, qrImage);
-    const pdfBuffer = await pdf(doc).toBuffer();
+    const pdfOutput = await pdf(doc).toBuffer();
+    const pdfBytes =
+      pdfOutput instanceof Uint8Array
+        ? pdfOutput
+        : pdfOutput instanceof ArrayBuffer
+        ? new Uint8Array(pdfOutput)
+        : pdfOutput instanceof Readable
+        ? await nodeStreamToUint8Array(pdfOutput)
+        : new Uint8Array(Buffer.from(pdfOutput as unknown as ArrayBuffer));
 
     const invoiceNo = sale.invoiceNo ?? sale.id.slice(0, 8);
     const dateStr = new Date(sale.soldAt ?? new Date()).toISOString().slice(0, 10);
     const filename = `Book-Invoice-${invoiceNo}-${dateStr}.pdf`;
 
-    return new NextResponse(pdfBuffer as any, {
+    return new NextResponse(pdfBytes, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,

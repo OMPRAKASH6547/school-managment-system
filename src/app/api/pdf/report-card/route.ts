@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       })),
     }));
 
-    const pdfBuffer = await generateReportCardBuffer({
+    const pdfOutput = await generateReportCardBuffer({
       schoolName: body.schoolName,
       schoolLogo: body.schoolLogo ?? null,
       branchName: body.branchName ?? null,
@@ -66,12 +66,18 @@ export async function POST(req: NextRequest) {
       qrDataUrl,
       // studentImage intentionally ignored by ReportCard for now
     });
+    const pdfBytes =
+      pdfOutput instanceof Uint8Array
+        ? pdfOutput
+        : pdfOutput instanceof ArrayBuffer
+        ? new Uint8Array(pdfOutput)
+        : new Uint8Array(Buffer.from(pdfOutput as unknown as ArrayBuffer));
 
     const studentNameSafe = body.studentName.trim().replace(/\s+/g, "-");
     const receiptDate = new Date().toISOString().slice(0, 10);
     const filename = `${studentNameSafe}_marksheet_${receiptDate}.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBytes, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
