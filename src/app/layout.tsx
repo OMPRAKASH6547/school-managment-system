@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SchoolSaaS - School & Coaching Management",
-  description: "Manage your school or coaching center with subscriptions and approvals",
+  title: "SWC - Smart School Cloud Platform",
+  description: "Smart School Cloud Platform for managing schools and coaching institutes",
 };
 
 export default function RootLayout({

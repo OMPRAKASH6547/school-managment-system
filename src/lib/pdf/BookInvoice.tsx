@@ -137,7 +137,30 @@ export const createInvoiceDocument = (
     const subtotal = sale.totalAmount;
     const gst = 0; // Add calculation if needed
     const grandTotal = subtotal + gst;
-    console.log(org, "org.logo");
+
+    const rawItems = Array.isArray(sale.items) ? sale.items : [];
+    const hasOnlySyntheticSetItems =
+        !!sale.bookSet &&
+        rawItems.length > 0 &&
+        rawItems.every((it: any) => it?.product?.category === "set_item");
+
+    const printableItems = hasOnlySyntheticSetItems
+        ? [
+              {
+                  id: "set-summary",
+                  name: `${sale.bookSet?.name ?? "Book Set"} (Set)`,
+                  quantity: rawItems.reduce((sum: number, it: any) => sum + (it.quantity ?? 0), 0),
+                  unitPrice: rawItems.length > 0 ? Number((sale.totalAmount / Math.max(1, rawItems.reduce((sum: number, it: any) => sum + (it.quantity ?? 0), 0))).toFixed(2)) : sale.totalAmount,
+                  amount: sale.totalAmount,
+              },
+          ]
+        : rawItems.map((it: any) => ({
+              id: it.id,
+              name: it?.product?.name ?? "Item",
+              quantity: it.quantity,
+              unitPrice: it.unitPrice,
+              amount: it.amount,
+          }));
 
     return (
         <Document>
@@ -168,6 +191,7 @@ export const createInvoiceDocument = (
                     <Text style={styles.bold}>Bill To:</Text>
                     <Text>{sale.customerName || "Walk-in Customer"}</Text>
                     {sale.customerPhone && <Text>{sale.customerPhone}</Text>}
+                    {sale.bookSet?.name && <Text>Selected Set: {sale.bookSet.name}</Text>}
                 </View>
 
                 {/* TABLE */}
@@ -179,9 +203,9 @@ export const createInvoiceDocument = (
                         <Text style={styles.col4}>Amount</Text>
                     </View>
 
-                    {sale.items.map((item: any) => (
+                    {printableItems.map((item: any) => (
                         <View key={item.id} style={styles.tableRow}>
-                            <Text style={styles.col1}>{item.product.name}</Text>
+                            <Text style={styles.col1}>{item.name}</Text>
                             <Text style={styles.col2}>{item.quantity}</Text>
                             <Text style={styles.col3}>₹{item.unitPrice}</Text>
                             <Text style={styles.col4}>₹{item.amount}</Text>

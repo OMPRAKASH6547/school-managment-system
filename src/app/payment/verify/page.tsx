@@ -35,6 +35,7 @@ export default async function PaymentVerifyPage({
     where: { id: paymentId },
     select: {
       id: true,
+      payerType: true,
       status: true,
       paidAt: true,
       amount: true,
@@ -42,12 +43,15 @@ export default async function PaymentVerifyPage({
       reference: true,
       verifiedAt: true,
       verifiedBy: true,
+      verifiedByName: true,
       student: { select: { firstName: true, lastName: true, rollNo: true } },
+      staff: { select: { firstName: true, lastName: true, employeeId: true } },
+      collectedBy: { select: { firstName: true, lastName: true } },
       organization: { select: { name: true, schoolCode: true } },
     },
   });
 
-  if (!payment || !payment.student) {
+  if (!payment || (!payment.student && !payment.staff)) {
     return (
       <div className="min-h-screen bg-slate-50 px-4 py-10">
         <div className="mx-auto max-w-2xl">
@@ -63,8 +67,8 @@ export default async function PaymentVerifyPage({
     );
   }
 
-  let acceptedBy: string | null = null;
-  if (payment.verifiedBy) {
+  let acceptedBy: string | null = payment.verifiedByName ?? null;
+  if (!acceptedBy && payment.verifiedBy) {
     const user = await prisma.user.findFirst({
       where: { id: payment.verifiedBy },
       select: { name: true },
@@ -86,10 +90,14 @@ export default async function PaymentVerifyPage({
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="text-lg font-semibold text-slate-900">
-                {payment.student.firstName} {payment.student.lastName}
+                {payment.payerType === "staff"
+                  ? `${payment.staff?.firstName ?? ""} ${payment.staff?.lastName ?? ""}`.trim()
+                  : `${payment.student?.firstName ?? ""} ${payment.student?.lastName ?? ""}`.trim()}
               </div>
               <div className="mt-1 text-sm text-slate-600">
-                Roll No: {payment.student.rollNo ?? "—"}
+                {payment.payerType === "staff"
+                  ? `Employee ID: ${payment.staff?.employeeId ?? "—"}`
+                  : `Roll No: ${payment.student?.rollNo ?? "—"}`}
               </div>
             </div>
             <div>
@@ -128,6 +136,12 @@ export default async function PaymentVerifyPage({
               <div className="text-xs text-slate-500">Accepted By</div>
               <div className="text-sm font-medium text-slate-900">
                 {acceptedBy ?? (payment.status === "verified" ? "—" : "Not verified yet")}
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <div className="text-xs text-slate-500">Collected By</div>
+              <div className="text-sm font-medium text-slate-900">
+                {payment.collectedBy ? `${payment.collectedBy.firstName} ${payment.collectedBy.lastName}` : "—"}
               </div>
             </div>
           </div>

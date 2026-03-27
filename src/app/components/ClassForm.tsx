@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type Class = {
   id: string;
   name: string;
+  subjects?: string | null;
   section: string | null;
   academicYear: string | null;
   capacity: number | null;
@@ -25,6 +26,13 @@ export function ClassForm({ cls }: { cls?: Class | null }) {
     room: cls?.room ?? "",
     status: cls?.status ?? "active",
   });
+  const [newSubject, setNewSubject] = useState("");
+  const [subjects, setSubjects] = useState<string[]>(
+    (cls?.subjects ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
 
   const url = cls ? `/api/school/classes/${cls.id}` : "/api/school/classes";
   async function handleSubmit(e: React.FormEvent) {
@@ -38,6 +46,7 @@ export function ClassForm({ cls }: { cls?: Class | null }) {
         body: JSON.stringify({
           ...form,
           capacity: form.capacity === "" ? null : Number(form.capacity),
+          subjects,
         }),
       });
       const data = await res.json();
@@ -81,6 +90,49 @@ export function ClassForm({ cls }: { cls?: Class | null }) {
           <input value={form.room} onChange={(e) => setForm((f) => ({ ...f, room: e.target.value }))} className="input-field mt-1" />
         </div>
       </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Subjects for this class</label>
+        <p className="mt-1 text-xs text-slate-500">These subjects are separate branch-wise with class data.</p>
+        <div className="mt-2 flex gap-2">
+          <input
+            value={newSubject}
+            onChange={(e) => setNewSubject(e.target.value)}
+            className="input-field flex-1"
+            placeholder="e.g. Mathematics"
+          />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              const value = newSubject.trim();
+              if (!value) return;
+              if (!subjects.some((s) => s.toLowerCase() === value.toLowerCase())) {
+                setSubjects((prev) => [...prev, value]);
+              }
+              setNewSubject("");
+            }}
+          >
+            Add
+          </button>
+        </div>
+        {subjects.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {subjects.map((subject) => (
+              <span key={subject} className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-800">
+                {subject}
+                <button
+                  type="button"
+                  className="rounded p-0.5 text-slate-500 hover:bg-slate-200"
+                  aria-label={`Remove ${subject}`}
+                  onClick={() => setSubjects((prev) => prev.filter((s) => s !== subject))}
+                >
+                  x
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       {cls && (
         <div>
           <label className="block text-sm font-medium text-slate-700">Status</label>
@@ -91,7 +143,12 @@ export function ClassForm({ cls }: { cls?: Class | null }) {
         </div>
       )}
       <div className="flex gap-2 pt-2">
-        <button type="submit" disabled={loading} className="btn-primary">
+        <button
+          type="submit"
+          disabled={loading}
+          aria-busy={loading}
+          className={`btn-primary ${loading ? "btn-loading" : ""}`}
+        >
           {loading ? "Saving..." : cls ? "Update" : "Create"}
         </button>
         <button type="button" onClick={() => router.back()} className="btn-secondary">

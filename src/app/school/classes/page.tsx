@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { getSession, getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { DeleteRowButton } from "@/app/components/DeleteRowButton";
 
 export default async function SchoolClassesPage() {
   const session = await getSession();
@@ -9,9 +10,9 @@ export default async function SchoolClassesPage() {
   if (session?.role === "staff") redirect("/school/staff-attendance");
   if (session?.role === "accountant") redirect("/school");
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const branchId = await getResolvedBranchIdForSchool(session);
   const classes = await prisma.class.findMany({
-    where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
+    where: { organizationId: orgId, branchId },
     orderBy: { name: "asc" },
     include: { _count: { select: { students: true } } },
   });
@@ -56,6 +57,7 @@ export default async function SchoolClassesPage() {
                       <Link href={`/school/classes/${c.id}`} className="text-sm text-primary-600 hover:underline">
                         Edit
                       </Link>
+                      <DeleteRowButton apiPath={`/api/school/classes/${c.id}`} />
                     </td>
                   </tr>
                 ))}

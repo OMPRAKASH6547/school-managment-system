@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSession, getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 
@@ -9,9 +9,9 @@ export default async function HostelPage() {
   if (session?.role === "staff") redirect("/school/staff-attendance");
   if (session?.role === "accountant") redirect("/school");
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const branchId = await getResolvedBranchIdForSchool(session);
   const rooms = await prisma.hostelRoom.findMany({
-    where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
+    where: { organizationId: orgId, branchId },
     orderBy: { name: "asc" },
     include: { _count: { select: { allocations: true } } },
   });

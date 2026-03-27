@@ -3,7 +3,7 @@ import { z } from "zod";
 import QRCode from "qrcode";
 import { pdf } from "@react-pdf/renderer";
 import { prisma } from "@/lib/db";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createFeeCardDocument } from "@/lib/pdf/FeeCard";
 import { requirePermission } from "@/lib/permissions";
 
@@ -20,12 +20,13 @@ export async function POST(req: NextRequest) {
     requireOrganization(session);
 
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
 
     const payment = await prisma.payment.findFirst({
       where: { id: body.paymentId, organizationId: orgId, branchId },
       select: {
         id: true,
+        payerType: true,
         amount: true,
         paidAt: true,
         method: true,
@@ -33,21 +34,24 @@ export async function POST(req: NextRequest) {
         status: true,
         verifiedAt: true,
         verifiedBy: true,
+        verifiedByName: true,
         student: { select: { id: true, firstName: true, lastName: true, rollNo: true } },
+        staff: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
+        collectedBy: { select: { id: true, firstName: true, lastName: true } },
         organization: { select: { id: true, name: true, logo: true, address: true, phone: true, email: true } },
       },
     });
 
     if (!payment) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
-    if (!payment.student || !payment.organization) {
+    if (!payment.organization || (!payment.student && !payment.staff)) {
       return NextResponse.json({ error: "Missing payment relations" }, { status: 500 });
     }
     if (payment.status !== "verified" || !payment.verifiedAt) {
       return NextResponse.json({ error: "Payment not verified yet" }, { status: 403 });
     }
 
-    let acceptedByName: string | null = null;
-    if (payment.verifiedBy) {
+    let acceptedByName: string | null = payment.verifiedByName ?? null;
+    if (!acceptedByName && payment.verifiedBy) {
       const user = await prisma.user.findFirst({
         where: { id: payment.verifiedBy },
         select: { name: true },
@@ -66,17 +70,20 @@ export async function POST(req: NextRequest) {
 
     const qrDataUrl = await QRCode.toDataURL(verificationUrl);
 
-    const studentNameSafe = `${payment.student.firstName} ${payment.student.lastName}`
+    const payerNameSafe = `${payment.student?.firstName ?? payment.staff?.firstName ?? ""} ${payment.student?.lastName ?? payment.staff?.lastName ?? ""}`
       .trim()
       .replace(/\s+/g, "-");
     const receiptDate = payment.verifiedAt.toISOString().slice(0, 10);
-    const filename = `${studentNameSafe}_receipt_${receiptDate}.pdf`;
+    const filename = `${payerNameSafe || "payment"}_receipt_${receiptDate}.pdf`;
 
     const doc = createFeeCardDocument({
       org: payment.organization,
-      student: payment.student,
+      payer: payment.student
+        ? { type: "student", firstName: payment.student.firstName, lastName: payment.student.lastName, code: payment.student.rollNo }
+        : { type: "staff", firstName: payment.staff?.firstName ?? "", lastName: payment.staff?.lastName ?? "", code: payment.staff?.employeeId ?? null },
       payment: {
         id: payment.id,
+        payerType: payment.payerType,
         amount: payment.amount,
         paidAt: payment.paidAt,
         method: payment.method,
@@ -85,7 +92,7 @@ export async function POST(req: NextRequest) {
         verifiedAt: payment.verifiedAt,
       },
       qrDataUrl,
-      acceptedByName,
+      acceptedByName: acceptedByName ?? (payment.collectedBy ? `${payment.collectedBy.firstName} ${payment.collectedBy.lastName}` : null),
     });
 
     const pdfBuffer = await pdf(doc).toBuffer();

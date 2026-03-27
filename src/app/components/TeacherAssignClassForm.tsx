@@ -15,24 +15,23 @@ export function TeacherAssignClassForm({
   const router = useRouter();
   const assignedSet = useMemo(() => new Set(assignedClassIds), [assignedClassIds]);
 
-  const firstAvailable = useMemo(() => {
-    return classes.find((c) => !assignedSet.has(c.id))?.id ?? classes[0]?.id ?? "";
-  }, [assignedSet, classes]);
-
-  const [selectedClassId, setSelectedClassId] = useState(firstAvailable);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!selectedClassId) return;
+    if (!selectedClassIds.length) {
+      setError("Select at least one class");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/school/teacher-assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherStaffId, classId: selectedClassId }),
+        body: JSON.stringify({ teacherStaffId, classIds: selectedClassIds }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -51,25 +50,30 @@ export function TeacherAssignClassForm({
     return <span className="text-xs text-slate-500">No active classes</span>;
   }
 
-  const disabled = assignedSet.has(selectedClassId);
-
   return (
-    <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">
+    <form onSubmit={handleAssign} className="mt-2 space-y-2">
       <select
-        value={selectedClassId}
-        onChange={(e) => setSelectedClassId(e.target.value)}
-        className="input-field flex-1 text-sm"
+        multiple
+        value={selectedClassIds}
+        onChange={(e) => {
+          const values = Array.from(e.target.selectedOptions).map((o) => o.value);
+          setSelectedClassIds(values);
+        }}
+        className="input-field w-full text-sm min-h-24"
       >
         {classes.map((c) => (
-          <option key={c.id} value={c.id} disabled={assignedSet.has(c.id)}>
-            {c.name}
+          <option key={c.id} value={c.id}>
+            {c.name}{assignedSet.has(c.id) ? " (already assigned)" : ""}
           </option>
         ))}
       </select>
-      <button type="submit" disabled={loading || disabled} className="btn-primary">
-        {loading ? "Assigning..." : "Assign"}
-      </button>
-      {error && <div className="mt-2 text-xs text-red-600">{error}</div>}
+      <div className="flex items-center gap-2">
+        <button type="submit" disabled={loading} className="btn-primary">
+          {loading ? "Assigning..." : "Assign selected classes"}
+        </button>
+        <span className="text-xs text-slate-500">Hold Ctrl/Cmd for multi-select.</span>
+      </div>
+      {error && <div className="text-xs text-red-600">{error}</div>}
     </form>
   );
 }

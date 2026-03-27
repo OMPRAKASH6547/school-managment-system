@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { LoginForm } from "./LoginForm";
+import { AppLogo } from "@/components/AppLogo";
 
 export default async function LoginPage() {
   const session = await getSession();
@@ -14,8 +15,8 @@ export default async function LoginPage() {
       <div className="w-full max-w-md">
         <div className="card">
           <div className="text-center mb-8">
-            <Link href="/" className="text-2xl font-bold text-primary-600">
-              SchoolSaaS
+            <Link href="/" className="inline-flex justify-center">
+              <AppLogo />
             </Link>
             <h1 className="mt-4 text-xl font-semibold text-slate-900">Sign in</h1>
             <p className="mt-1 text-sm text-slate-500">Enter your credentials</p>

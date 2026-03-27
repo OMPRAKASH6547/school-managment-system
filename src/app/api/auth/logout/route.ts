@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { destroySession } from "@/lib/auth";
+import { clearSessionCookie } from "@/lib/auth";
 
 export async function POST() {
-  await destroySession();
-  return NextResponse.redirect(new URL("/", process.env.NEXTAUTH_URL || "http://localhost:3000"), 302);
+  const base = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const res = NextResponse.redirect(new URL("/", base), 302);
+  clearSessionCookie(res);
+  return res;
 }

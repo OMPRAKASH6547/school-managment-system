@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     requirePermission(session, "upload", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
 
     const formData = await req.formData();
     const type = formData.get("type") as string; // "logo" | "student"

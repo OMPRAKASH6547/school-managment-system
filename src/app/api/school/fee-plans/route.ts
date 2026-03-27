@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
   name: z.string().min(1),
+  payerType: z.enum(["student", "staff"]).default("student"),
   amount: z.number().positive(),
   frequency: z.enum(["one_time", "monthly", "quarterly", "yearly"]),
   classId: z.string().nullable().optional(),
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     requirePermission(session, "fees.plans", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
 
     const raw = await req.json();
     const data = bodySchema.parse({
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
         organizationId: orgId,
         branchId,
         name: data.name,
+        payerType: data.payerType,
         amount: data.amount,
         frequency: data.frequency,
         classId: data.classId ?? null,

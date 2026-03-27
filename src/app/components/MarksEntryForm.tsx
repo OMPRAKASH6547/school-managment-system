@@ -19,6 +19,7 @@ export function MarksEntryForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [deletingResults, setDeletingResults] = useState(false);
   const [error, setError] = useState("");
   const [marks, setMarks] = useState<Record<string, Record<string, number>>>({});
 
@@ -34,8 +35,12 @@ export function MarksEntryForm({
   }, [exam.subjects, students]);
 
   async function loadExisting() {
-    const res = await fetch(`/api/school/exams/${exam.id}/results`);
-    if (!res.ok) return;
+    const res = await fetch(`/api/school/exams/${exam.id}/results`, { credentials: "include" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "Failed to load existing marks");
+      return;
+    }
     const data = await res.json();
     if (data.results?.length) {
       const next: Record<string, Record<string, number>> = {};
@@ -68,6 +73,7 @@ export function MarksEntryForm({
       });
       const res = await fetch(`/api/school/exams/${exam.id}/results`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entries }),
       });
@@ -77,8 +83,9 @@ export function MarksEntryForm({
         return;
       }
       router.refresh();
-    } catch {
-      setError("Failed to save");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to save";
+      setError(msg || "Failed to save");
     } finally {
       setLoading(false);
     }
@@ -89,17 +96,39 @@ export function MarksEntryForm({
     setError("");
     setPublishing(true);
     try {
-      const res = await fetch(`/api/school/exams/${exam.id}/publish`, { method: "POST" });
+      const res = await fetch(`/api/school/exams/${exam.id}/publish`, { method: "POST", credentials: "include" });
       if (!res.ok) {
         const d = await res.json();
         setError(d.error || "Failed to publish");
         return;
       }
       router.refresh();
-    } catch {
-      setError("Failed to publish");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to publish";
+      setError(msg || "Failed to publish");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function handleDeleteResults() {
+    if (!confirm("Delete all saved results for this exam? This cannot be undone.")) return;
+    setError("");
+    setDeletingResults(true);
+    try {
+      const res = await fetch(`/api/school/exams/${exam.id}/results`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) {
+        const d = await res.json();
+        setError(d.error || "Failed to delete results");
+        return;
+      }
+      await loadExisting();
+      router.refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to delete results";
+      setError(msg || "Failed to delete results");
+    } finally {
+      setDeletingResults(false);
     }
   }
 
@@ -160,6 +189,16 @@ export function MarksEntryForm({
         {canPublish && exam.status !== "published" && (
           <button type="button" onClick={handlePublish} disabled={publishing} className="rounded-lg bg-school-green px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
             {publishing ? "Publishing..." : "Publish results"}
+          </button>
+        )}
+        {canPublish && (
+          <button
+            type="button"
+            onClick={handleDeleteResults}
+            disabled={deletingResults}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {deletingResults ? "Deleting..." : "Delete all results"}
           </button>
         )}
         {exam.status === "published" && (

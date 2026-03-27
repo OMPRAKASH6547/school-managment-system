@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { randomBytes } from "crypto";
 import { requirePermission } from "@/lib/permissions";
@@ -12,7 +12,7 @@ export async function POST(
     const session = await getSession();
     requirePermission(session, "examinations.publish", "write");
     requireOrganization(session);
-    const branchId = await requireBranchAccess(session.organizationId!, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(session.organizationId!, await getSelectedBranchId());
 
     const { id } = await params;
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     requirePermission(session, "books", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
     const data = bodySchema.parse(await req.json());
     await prisma.bookProduct.create({
       data: {

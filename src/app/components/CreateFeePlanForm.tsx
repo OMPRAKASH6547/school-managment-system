@@ -8,9 +8,11 @@ type Class = { id: string; name: string };
 export function CreateFeePlanForm({
   classes,
   organizationId,
+  initialPayerType = "student",
 }: {
   classes: Class[];
   organizationId: string;
+  initialPayerType?: "student" | "staff";
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -19,6 +21,7 @@ export function CreateFeePlanForm({
     name: "",
     amount: "",
     frequency: "monthly" as "one_time" | "monthly" | "quarterly" | "yearly",
+    payerType: initialPayerType as "student" | "staff",
     classId: "",
     dueDay: "",
   });
@@ -36,6 +39,7 @@ export function CreateFeePlanForm({
           name: form.name,
           amount: Number(form.amount),
           frequency: form.frequency,
+          payerType: form.payerType,
           classId: form.classId || null,
           dueDay: form.dueDay ? Number(form.dueDay) : null,
         }),
@@ -45,7 +49,14 @@ export function CreateFeePlanForm({
         setError(data.error || "Failed");
         return;
       }
-      setForm({ name: "", amount: "", frequency: "monthly", classId: "", dueDay: "" });
+      setForm({
+        name: "",
+        amount: "",
+        frequency: "monthly",
+        payerType: initialPayerType,
+        classId: "",
+        dueDay: "",
+      });
       router.refresh();
     } catch {
       setError("Something went wrong");
@@ -83,6 +94,23 @@ export function CreateFeePlanForm({
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
+          <label className="block text-xs font-medium text-slate-600">Plan for</label>
+          <select
+            value={form.payerType}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                payerType: e.target.value as "student" | "staff",
+                classId: e.target.value === "staff" ? "" : f.classId,
+              }))
+            }
+            className="input-field mt-1 text-sm"
+          >
+            <option value="student">Student</option>
+            <option value="staff">Teacher / Staff</option>
+          </select>
+        </div>
+        <div>
           <label className="block text-xs font-medium text-slate-600">Frequency</label>
           <select
             value={form.frequency}
@@ -108,19 +136,21 @@ export function CreateFeePlanForm({
           />
         </div>
       </div>
-      <div>
-        <label className="block text-xs font-medium text-slate-600">Class (optional)</label>
-        <select
-          value={form.classId}
-          onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
-          className="input-field mt-1 text-sm"
-        >
-          <option value="">All classes</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
+      {form.payerType === "student" && (
+        <div>
+          <label className="block text-xs font-medium text-slate-600">Class (optional)</label>
+          <select
+            value={form.classId}
+            onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
+            className="input-field mt-1 text-sm"
+          >
+            <option value="">All classes</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <button type="submit" disabled={loading} className="btn-primary text-sm">
         {loading ? "Creating..." : "Create fee plan"}
       </button>

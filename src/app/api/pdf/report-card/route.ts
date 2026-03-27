@@ -19,8 +19,10 @@ const examSchema = z.object({
 const bodySchema = z.object({
   slug: z.string().min(1),
   token: z.string().min(1),
+  examId: z.string().optional().nullable(),
   schoolName: z.string().min(1),
   schoolLogo: z.string().nullable().optional(),
+  branchName: z.string().nullable().optional(),
   studentName: z.string().min(1),
   rollNo: z.string().nullable().optional(),
   className: z.string().nullable().optional(),
@@ -37,9 +39,10 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_BASE_URL ??
       "http://localhost:3000";
 
+    const examQs = body.examId ? `?exam=${encodeURIComponent(body.examId)}` : "";
     const resultUrl = `${baseUrl.replace(/\/$/, "")}/r/${encodeURIComponent(body.slug)}/${encodeURIComponent(
       body.token
-    )}`;
+    )}${examQs}`;
     const qrDataUrl = await QRCode.toDataURL(resultUrl);
 
     const normalizedExams = body.exams.map((exam) => ({
@@ -54,6 +57,8 @@ export async function POST(req: NextRequest) {
 
     const pdfBuffer = await generateReportCardBuffer({
       schoolName: body.schoolName,
+      schoolLogo: body.schoolLogo ?? null,
+      branchName: body.branchName ?? null,
       studentName: body.studentName,
       rollNo: body.rollNo ?? null,
       className: body.className ?? null,
@@ -64,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     const studentNameSafe = body.studentName.trim().replace(/\s+/g, "-");
     const receiptDate = new Date().toISOString().slice(0, 10);
-    const filename = `${studentNameSafe}_receipt_${receiptDate}.pdf`;
+    const filename = `${studentNameSafe}_marksheet_${receiptDate}.pdf`;
 
     return new NextResponse(pdfBuffer, {
       headers: {

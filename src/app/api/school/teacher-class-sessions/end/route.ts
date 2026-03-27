@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
@@ -11,14 +11,16 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
     requireOrganization(session);
-    if (session.role !== "teacher") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (session.role !== "teacher" && session.role !== "staff") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
     const body = bodySchema.parse(await req.json());
 
     const teacherStaff = await prisma.staff.findFirst({
-      where: { email: session.email, organizationId: orgId, branchId, role: "teacher" },
+      where: { email: session.email, organizationId: orgId, branchId, status: "active" },
       select: { id: true },
     });
     if (!teacherStaff) return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
@@ -47,7 +49,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    if (e instanceof z.ZodError) return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    if (e instanceof z.ZodError) {
+      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    }
+    if (e instanceof Error) {
+      const msg = e.message ?? "Failed";
+      const status = msg.includes("No organization") || msg.includes("No organization assigned") ? 401 : msg.includes("Unauthorized") ? 403 : 500;
+      return NextResponse.json({ error: msg }, { status });
+    }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

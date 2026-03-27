@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSession, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
+  branchId: z.string().min(1),
   employeeId: z.string().optional(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
@@ -15,6 +16,16 @@ const bodySchema = z.object({
   joinDate: z.string().nullable().optional(),
   salary: z.number().nullable().optional(),
   status: z.string().optional(),
+  classIds: z.array(z.string().min(1)).optional(),
+  classSubjects: z.record(z.string()).optional(),
+  moduleAccess: z.record(
+    z.object({
+      view: z.boolean().optional(),
+      add: z.boolean().optional(),
+      edit: z.boolean().optional(),
+      delete: z.boolean().optional(),
+    })
+  ).optional(),
 });
 
 export async function POST(
@@ -25,10 +36,9 @@ export async function POST(
     const session = await getSession();
     requirePermission(session, "staff", "write");
     requireOrganization(session);
-    const branchId = await requireBranchAccess(session.organizationId!, await getSelectedBranchId());
     const { id } = await params;
     const staff = await prisma.staff.findFirst({
-      where: { id, organizationId: session.organizationId!, branchId },
+      where: { id, organizationId: session.organizationId! },
     });
     if (!staff) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -39,9 +49,18 @@ export async function POST(
       salary: raw.salary != null ? Number(raw.salary) : null,
     });
 
+    const targetBranch = await prisma.branch.findFirst({
+      where: { id: data.branchId, organizationId: session.organizationId! },
+      select: { id: true },
+    });
+    if (!targetBranch) {
+      return NextResponse.json({ error: "Invalid branch" }, { status: 400 });
+    }
+
     await prisma.staff.update({
       where: { id },
       data: {
+        branchId: targetBranch.id,
         employeeId: data.employeeId ?? null,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -55,14 +74,88 @@ export async function POST(
       },
     });
 
+    // Keep teacher class assignments in sync from edit form.
+    if (data.role === "teacher") {
+      const uniqueClassIds = Array.from(new Set(data.classIds ?? []));
+      const validClasses = await prisma.class.findMany({
+        where: {
+          organizationId: session.organizationId!,
+          branchId: targetBranch.id,
+          status: "active",
+          id: { in: uniqueClassIds },
+        },
+        select: { id: true },
+      });
+      const validClassIds = validClasses.map((c) => c.id);
+
+      const existingAssignments = await prisma.teacherAssignment.findMany({
+        where: { organizationId: session.organizationId!, branchId: targetBranch.id, teacherStaffId: id },
+        select: { id: true, classId: true },
+      });
+
+      const existingIds = new Set(existingAssignments.map((a) => a.classId));
+      const targetIds = new Set(validClassIds);
+
+      for (const clsId of validClassIds) {
+        if (!existingIds.has(clsId)) {
+          const subjectText = data.classSubjects?.[clsId]?.trim() || null;
+          try {
+            await prisma.teacherAssignment.create({
+              data: ({
+                organizationId: session.organizationId!,
+                branchId: targetBranch.id,
+                teacherStaffId: id,
+                classId: clsId,
+                ...(subjectText ? ({ subjects: subjectText } as any) : {}),
+              } as any),
+            });
+          } catch {
+            await prisma.teacherAssignment.create({
+              data: {
+                organizationId: session.organizationId!,
+                branchId: targetBranch.id,
+                teacherStaffId: id,
+                classId: clsId,
+              },
+            });
+          }
+        } else {
+          const current = existingAssignments.find((a) => a.classId === clsId);
+          const subjectText = data.classSubjects?.[clsId]?.trim() || null;
+          if (current) {
+            try {
+              await prisma.teacherAssignment.update({
+                where: { id: current.id },
+                data: ({ subjects: subjectText } as any),
+              });
+            } catch {
+              // ignore if field does not exist in current Prisma client
+            }
+          }
+        }
+      }
+
+      for (const a of existingAssignments) {
+        if (!targetIds.has(a.classId)) {
+          await prisma.teacherAssignment.delete({ where: { id: a.id } });
+        }
+      }
+    } else {
+      await prisma.teacherAssignment.deleteMany({
+        where: { organizationId: session.organizationId!, teacherStaffId: id },
+      });
+    }
+
     // Keep login role in sync with staff role.
     const userRole = data.role;
+    const permissionsJson = data.moduleAccess ? JSON.stringify(data.moduleAccess) : null;
     await prisma.user.updateMany({
       where: { email: data.email, organizationId: session.organizationId!, isActive: true },
       data: {
         role: userRole,
         name: `${data.firstName} ${data.lastName}`,
         phone: data.phone ?? null,
+        permissionsJson,
       },
     });
 
@@ -71,6 +164,58 @@ export async function POST(
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
     }
+    if (e instanceof Error && e.message.includes("Unauthorized")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Failed" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    requirePermission(session, "staff", "write");
+    requireOrganization(session);
+    const { id } = await params;
+    const staff = await prisma.staff.findFirst({
+      where: { id, organizationId: session.organizationId! },
+      select: { id: true, email: true },
+    });
+    if (!staff) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    await prisma.$transaction(async (tx) => {
+      // Remove dependent records that require an existing staff row.
+      await tx.staffAttendance.deleteMany({
+        where: { organizationId: session.organizationId!, staffId: id },
+      });
+      await tx.teacherAssignment.deleteMany({
+        where: { organizationId: session.organizationId!, teacherStaffId: id },
+      });
+      await tx.teacherClassSession.deleteMany({
+        where: { organizationId: session.organizationId!, teacherStaffId: id },
+      });
+
+      // Payments can remain, but should no longer point to deleted staff.
+      await tx.payment.updateMany({
+        where: { organizationId: session.organizationId!, staffId: id },
+        data: { staffId: null },
+      });
+      await tx.payment.updateMany({
+        where: { organizationId: session.organizationId!, collectedByStaffId: id },
+        data: { collectedByStaffId: null },
+      });
+
+      await tx.staff.delete({ where: { id } });
+      await tx.user.updateMany({
+        where: { organizationId: session.organizationId!, email: staff.email },
+        data: { isActive: false },
+      });
+    });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

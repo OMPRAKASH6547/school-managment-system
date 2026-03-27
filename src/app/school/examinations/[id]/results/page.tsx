@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSession, getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { CopyLinkButton } from "@/app/components/CopyLinkButton";
+import { randomBytes } from "crypto";
+import { ResultLinkActions } from "@/app/components/ResultLinkActions";
 
 export default async function ExamResultsLinksPage({
   params,
@@ -12,10 +15,10 @@ export default async function ExamResultsLinksPage({
     if (!session) redirect("/login");
   if (session.role !== "school_admin" && session.role !== "admin") redirect("/school/examinations");
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const branchId = await getResolvedBranchIdForSchool(session);
   const { id } = await params;
   const exam = await prisma.exam.findFirst({
-    where: branchId ? { id, organizationId: orgId, branchId } : { id, organizationId: orgId },
+    where: { id, organizationId: orgId, branchId },
   });
   if (!exam) notFound();
 
@@ -25,15 +28,39 @@ export default async function ExamResultsLinksPage({
   });
   if (!org) notFound();
 
-  const students = await prisma.student.findMany({
+  const isDisabledToken = (token: string | null) => !!token && token.startsWith("disabled_");
+
+  let students = await prisma.student.findMany({
     where: {
       organizationId: orgId,
-      ...(branchId ? { branchId } : {}),
+      branchId,
       ...(exam.classId ? { classId: exam.classId } : {}),
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     select: { id: true, firstName: true, lastName: true, rollNo: true, resultToken: true },
   });
+
+  // Backfill missing tokens so every student row gets a unique result link.
+  const missingTokenStudents = students.filter((s) => !s.resultToken);
+  if (missingTokenStudents.length > 0) {
+    await Promise.all(
+      missingTokenStudents.map((s) =>
+        prisma.student.updateMany({
+          where: { id: s.id, organizationId: orgId, branchId, resultToken: null },
+          data: { resultToken: randomBytes(24).toString("base64url") },
+        })
+      )
+    );
+    students = await prisma.student.findMany({
+      where: {
+        organizationId: orgId,
+        branchId,
+        ...(exam.classId ? { classId: exam.classId } : {}),
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      select: { id: true, firstName: true, lastName: true, rollNo: true, resultToken: true },
+    });
+  }
 
   const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
@@ -50,6 +77,7 @@ export default async function ExamResultsLinksPage({
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Student</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Unique result link</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white">
@@ -59,18 +87,26 @@ export default async function ExamResultsLinksPage({
                   {s.firstName} {s.lastName} {s.rollNo ? `(${s.rollNo})` : ""}
                 </td>
                 <td className="px-6 py-4">
-                  {s.resultToken ? (
-                    <a
-                      href={`${baseUrl}/r/${org.slug}/${s.resultToken}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-school-green hover:underline break-all"
-                    >
-                      {baseUrl}/r/{org.slug}/{s.resultToken}
-                    </a>
+                  {s.resultToken && !isDisabledToken(s.resultToken) ? (
+                    <div className="flex items-start gap-2">
+                      <a
+                        href={`${baseUrl}/r/${org.slug}/${s.resultToken}?exam=${id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-school-green hover:underline break-all"
+                      >
+                        {baseUrl}/r/{org.slug}/{s.resultToken}?exam={id}
+                      </a>
+                      <CopyLinkButton url={`${baseUrl}/r/${org.slug}/${s.resultToken}?exam=${id}`} />
+                    </div>
                   ) : (
-                    <span className="text-slate-400">Publish exam to generate link</span>
+                    <span className="text-slate-400">
+                      {isDisabledToken(s.resultToken) ? "Link deleted" : "Publish exam to generate link"}
+                    </span>
                   )}
+                </td>
+                <td className="px-6 py-4">
+                  <ResultLinkActions studentId={s.id} hasLink={!!s.resultToken && !isDisabledToken(s.resultToken)} />
                 </td>
               </tr>
             ))}

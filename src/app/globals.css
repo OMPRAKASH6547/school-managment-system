@@ -7,9 +7,37 @@
   --background: #f8fafc;
 }
 
+html {
+  /* Mobile-first text scale for all modules */
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    /* Tablet */
+    font-size: 15px;
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    /* Desktop */
+    font-size: 16px;
+  }
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @layer components {
@@ -27,5 +55,22 @@ body {
   }
   .card {
     @apply rounded-xl border border-slate-200 bg-white p-6 shadow-card;
+  }
+  .skeleton-shimmer {
+    background: linear-gradient(90deg, #e2e8f0 20%, #f1f5f9 50%, #e2e8f0 80%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.2s linear infinite;
+  }
+  .btn-loading {
+    @apply relative overflow-hidden text-transparent;
+  }
+  .btn-loading::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.25) 20%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.25) 80%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1s linear infinite;
   }
 }

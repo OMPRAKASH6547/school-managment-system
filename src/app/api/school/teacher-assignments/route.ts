@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
   teacherStaffId: z.string().min(1),
-  classId: z.string().min(1),
+  classIds: z.array(z.string().min(1)).min(1),
 });
 
 export async function POST(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     requireOrganization(session);
 
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
 
     const body = bodySchema.parse(await req.json());
 
@@ -28,22 +28,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Teacher not found in this branch" }, { status: 404 });
     }
 
-    const cls = await prisma.class.findFirst({
-      where: { id: body.classId, organizationId: orgId, branchId, status: "active" },
+    const uniqueClassIds = Array.from(new Set(body.classIds));
+    const foundClasses = await prisma.class.findMany({
+      where: { id: { in: uniqueClassIds }, organizationId: orgId, branchId, status: "active" },
       select: { id: true },
     });
-    if (!cls) {
-      return NextResponse.json({ error: "Class not found in this branch" }, { status: 404 });
+    if (foundClasses.length !== uniqueClassIds.length) {
+      return NextResponse.json({ error: "One or more classes not found in this branch" }, { status: 404 });
     }
 
-    await prisma.teacherAssignment.create({
-      data: {
-        organizationId: orgId,
-        branchId,
-        teacherStaffId: teacher.id,
-        classId: cls.id,
-      },
-    });
+    for (const classId of uniqueClassIds) {
+      const existing = await prisma.teacherAssignment.findFirst({
+        where: { organizationId: orgId, branchId, teacherStaffId: teacher.id, classId },
+        select: { id: true },
+      });
+      if (!existing) {
+        await prisma.teacherAssignment.create({
+          data: {
+            organizationId: orgId,
+            branchId,
+            teacherStaffId: teacher.id,
+            classId,
+          },
+        });
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {

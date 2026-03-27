@@ -12,6 +12,10 @@ export function TeacherClassTrackingControls({
 }) {
   const router = useRouter();
   const activeSet = new Set(activeClassIds);
+  const activeClassId = activeClassIds[0] ?? null;
+  const activeClassName = activeClassId
+    ? classes.find((c) => c.id === activeClassId)?.name ?? "Active class"
+    : null;
   const [loadingClassId, setLoadingClassId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +25,7 @@ export function TeacherClassTrackingControls({
     try {
       const res = await fetch("/api/school/teacher-class-sessions/start", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ classId }),
       });
@@ -43,6 +48,7 @@ export function TeacherClassTrackingControls({
     try {
       const res = await fetch("/api/school/teacher-class-sessions/end", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ classId }),
       });
@@ -64,6 +70,21 @@ export function TeacherClassTrackingControls({
   return (
     <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm p-4">
       {error && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {activeClassId ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <span>
+            <span className="font-medium">{activeClassName}</span> is active. End it to start another class.
+          </span>
+          <button
+            type="button"
+            onClick={() => end(activeClassId)}
+            disabled={loadingClassId === activeClassId}
+            className="rounded-lg bg-school-green px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            {loadingClassId === activeClassId ? "Ending..." : "End Active Class"}
+          </button>
+        </div>
+      ) : null}
       <table className="min-w-full divide-y divide-slate-200">
         <thead className="bg-slate-50">
           <tr>
@@ -82,7 +103,7 @@ export function TeacherClassTrackingControls({
                     <button
                       type="button"
                       onClick={() => start(c.id)}
-                      disabled={loadingClassId === c.id}
+                      disabled={loadingClassId === c.id || !!activeClassId}
                       className="btn-primary"
                     >
                       {loadingClassId === c.id ? "Starting..." : "Start"}

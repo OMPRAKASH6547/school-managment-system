@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, requireOrganization, requireBranchAccess, setSelectedBranch } from "@/lib/auth";
+import {
+  applyBranchCookie,
+  assertBranchInOrganization,
+  getSession,
+  requireOrganization,
+} from "@/lib/auth";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 
@@ -14,10 +19,11 @@ export async function POST(req: NextRequest) {
     requireOrganization(session);
 
     const body = bodySchema.parse(await req.json());
-    const branchId = requireBranchAccess(session.organizationId!, body.branchId);
+    const branchId = await assertBranchInOrganization(session.organizationId!, body.branchId);
 
-    await setSelectedBranch(branchId);
-    return NextResponse.json({ ok: true });
+    const res = NextResponse.json({ ok: true });
+    applyBranchCookie(res, branchId);
+    return res;
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.errors[0]?.message ?? "Invalid input" }, { status: 400 });

@@ -28,7 +28,7 @@ npm install
 
 Copy `.env.example` to `.env` and set:
 
-- `DATABASE_URL` — MongoDB connection string (e.g. `mongodb+srv://user:pass@cluster.mongodb.net/schoolsaas`)
+- `DATABASE_URL` — MongoDB connection string (e.g. `mongodb+srv://user:pass@cluster.mongodb.net/schoolsaas?retryWrites=true&w=majority`)
 - `NEXTAUTH_URL="http://localhost:3000"` (or your app URL)
 
 ### 3. Database
@@ -58,6 +58,13 @@ After running `npm run db:seed`, use these credentials to log in as Super Admin:
 
 Log in at `/login` → you will be redirected to `/super-admin` to approve organizations and assign plans.
 
+### 6. Teacher & staff login
+
+1. A **School Admin** (or **Admin** role) creates staff in **Teachers & Staff** and sets role (e.g. Teacher, Staff, Accountant).
+2. On save, the app shows a **temporary password** once — share it with the user securely.
+3. The staff member opens **`/login`**, enters the **same email** as on the staff record and that password.
+4. After login, **Teachers** see **Teacher Dashboard**, **Attendance**, **Examinations**, **Books & copy** (roll-number lookup), and **Transport**. **Staff** see **Dashboard**, **Staff attendance**, **Books & copy**, and **Transport**.
+
 ## Project Structure
 
 ```
@@ -78,6 +85,11 @@ prisma/
 ## Production Notes
 
 - **MongoDB**: Use a production MongoDB cluster (e.g. MongoDB Atlas) and set `DATABASE_URL`.
+- If you see `ReplicaSetNoPrimary` / `Server selection timeout`, your DB is reachable but has no elected primary.
+  - Atlas: confirm cluster health and IP/network access.
+  - Local MongoDB: ensure mongod is running and your URI matches your setup:
+    - standalone local: `mongodb://localhost:27017/schoolsaa?directConnection=true`
+    - replica set local: `mongodb://localhost:27017/schoolsaa?replicaSet=rs0`
 - Set a strong `NEXTAUTH_SECRET` (or equivalent secret) for session signing.
 - Add **Stripe** (or another provider) for real subscription billing; the schema already has `stripeCustomerId` and `stripeSubscriptionId` on `Subscription`.
 - Enforce **plan limits** (e.g. `maxStudents`, `maxStaff`) in school APIs using the current subscription plan.

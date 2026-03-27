@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSession, getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { StudentForm } from "@/app/components/StudentForm";
 
@@ -11,15 +11,15 @@ export default async function EditStudentPage({
 }) {
   const session = await getSession();
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const branchId = await getResolvedBranchIdForSchool(session);
   const { id } = await params;
   const student = await prisma.student.findFirst({
-    where: branchId ? { id, organizationId: orgId, branchId } : { id, organizationId: orgId },
+    where: { id, organizationId: orgId, branchId },
   });
   if (!student) notFound();
 
   const classes = await prisma.class.findMany({
-    where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
+    where: { organizationId: orgId, branchId, status: "active" },
     orderBy: { name: "asc" },
   });
 

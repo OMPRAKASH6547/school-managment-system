@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { canPermission, type PermissionModule } from "@/lib/permissions";
+import type { UserRole } from "@/types";
 
 interface NavItem {
   href: string;
   label: string;
   children?: { href: string; label: string }[];
+  icon: string;
 }
 
 interface SchoolLayoutProps {
@@ -17,7 +20,8 @@ interface SchoolLayoutProps {
   schoolLogo: string | null;
   website: string | null;
   userName: string;
-  role: string;
+  role: UserRole;
+  permissions?: Record<string, { view?: boolean; add?: boolean; edit?: boolean; delete?: boolean }> | null;
   branches: { id: string; name: string; branchCode: string }[];
   selectedBranchId: string | null;
   /** When true, layout defaulted a branch but could not set the httpOnly cookie — sync via API once. */
@@ -25,20 +29,41 @@ interface SchoolLayoutProps {
 }
 
 const navItems: NavItem[] = [
-  { href: "/school", label: "Dashboard" },
-  { href: "/school/students", label: "Students" },
-  { href: "/school/staff", label: "Teachers & Staff" },
-  { href: "/school/classes", label: "Classes & Subjects" },
-  { href: "/school/examinations", label: "Examinations" },
-  { href: "/school/attendance", label: "Attendance" },
-  { href: "/school/teacher", label: "Teacher Dashboard" },
-  { href: "/school/staff-attendance", label: "Staff Attendance" },
-  { href: "/school/fees", label: "Fee Management" },
-  { href: "/school/library", label: "Library" },
-  { href: "/school/books", label: "Books & Copy" },
-  { href: "/school/hostel", label: "Hostel Management" },
-  { href: "/school/settings", label: "Settings" },
+  { href: "/school", label: "Dashboard", icon: "DB" },
+  { href: "/school/students", label: "Students", icon: "ST" },
+  { href: "/school/staff", label: "Teachers & Staff", icon: "TS" },
+  { href: "/school/classes", label: "Classes & Subjects", icon: "CL" },
+  { href: "/school/examinations", label: "Examinations", icon: "EX" },
+  { href: "/school/attendance", label: "Attendance", icon: "AT" },
+  { href: "/school/teacher", label: "Teacher Dashboard", icon: "TD" },
+  { href: "/school/staff-attendance", label: "Staff Attendance", icon: "SA" },
+  { href: "/school/fees", label: "Fee Management", icon: "FE" },
+  { href: "/school/payment-verification", label: "Payment Verification", icon: "PV" },
+  { href: "/school/library", label: "Library", icon: "LB" },
+  { href: "/school/books", label: "Books & Copy", icon: "BK" },
+  { href: "/school/transport", label: "Transport", icon: "TR" },
+  { href: "/school/hostel", label: "Hostel Management", icon: "HS" },
+  { href: "/school/settings", label: "Settings", icon: "SE" },
 ];
+
+function MenuIcon({ href }: { href: string }) {
+  if (href === "/school") return <span aria-hidden>🏠</span>;
+  if (href === "/school/students") return <span aria-hidden>🎓</span>;
+  if (href === "/school/staff" || href === "/school/teacher" || href === "/school/staff-attendance") {
+    return <span aria-hidden>👥</span>;
+  }
+  if (href === "/school/classes") return <span aria-hidden>🏫</span>;
+  if (href === "/school/examinations") return <span aria-hidden>📝</span>;
+  if (href === "/school/attendance") return <span aria-hidden>📅</span>;
+  if (href === "/school/fees") return <span aria-hidden>💳</span>;
+  if (href === "/school/payment-verification") return <span aria-hidden>✅</span>;
+  if (href === "/school/library") return <span aria-hidden>📚</span>;
+  if (href === "/school/books") return <span aria-hidden>📖</span>;
+  if (href === "/school/transport") return <span aria-hidden>🚌</span>;
+  if (href === "/school/hostel") return <span aria-hidden>🏨</span>;
+  if (href === "/school/settings") return <span aria-hidden>⚙️</span>;
+  return <span aria-hidden>•</span>;
+}
 
 export function SchoolLayout({
   children,
@@ -47,20 +72,75 @@ export function SchoolLayout({
   website,
   userName,
   role,
+  permissions = null,
   branches,
   selectedBranchId,
   needsBranchCookie = false,
 }: SchoolLayoutProps) {
+  const dashboardHref = role === "teacher" ? "/school/teacher" : role === "staff" ? "/school/staff-attendance" : "/school";
+  const displayNavItems = navItems
+    .map((item) => (item.href === "/school" ? { ...item, href: dashboardHref, label: "Dashboard" } : item))
+    .filter((item) => {
+      if (role === "teacher") return item.href !== "/school/staff-attendance";
+      if (role === "staff") return item.href !== "/school/teacher";
+      return true;
+    });
+
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const branchCookieSynced = useRef(false);
 
   const [branchLoading, setBranchLoading] = useState(false);
   const [activeBranchId, setActiveBranchId] = useState(selectedBranchId ?? null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [menuCollapsed, setMenuCollapsed] = useState(false);
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeProgress, setRouteProgress] = useState(0);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearRouteLoadingTimers() {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    if (finishTimeoutRef.current) {
+      clearTimeout(finishTimeoutRef.current);
+      finishTimeoutRef.current = null;
+    }
+  }
+
+  function startRouteLoading() {
+    clearRouteLoadingTimers();
+    setRouteLoading(true);
+    setRouteProgress(12);
+    progressIntervalRef.current = setInterval(() => {
+      setRouteProgress((prev) => (prev >= 88 ? prev : prev + 8));
+    }, 120);
+  }
+
+  function finishRouteLoading() {
+    clearRouteLoadingTimers();
+    setRouteProgress(100);
+    finishTimeoutRef.current = setTimeout(() => {
+      setRouteLoading(false);
+      setRouteProgress(0);
+    }, 280);
+  }
 
   useEffect(() => {
     setActiveBranchId(selectedBranchId ?? null);
   }, [selectedBranchId]);
+
+  useEffect(() => {
+    if (routeLoading) finishRouteLoading();
+    return () => {
+      clearRouteLoadingTimers();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   useEffect(() => {
     if (!needsBranchCookie || !selectedBranchId || branchCookieSynced.current) return;
@@ -83,6 +163,7 @@ export function SchoolLayout({
     if (!nextBranchId || nextBranchId === activeBranchId) return;
     try {
       setBranchLoading(true);
+      startRouteLoading();
       const res = await fetch("/api/school/select-branch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,38 +178,49 @@ export function SchoolLayout({
   }
 
   async function handleLogout() {
+    startRouteLoading();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
     router.refresh();
   }
 
-  const allowedHrefs = (() => {
-    if (role === "teacher") {
-      return new Set<string>([
-        "/school/teacher",
-        "/school/attendance",
-        "/school/examinations",
-      ]);
-    }
-    if (role === "accountant") {
-      return new Set<string>([
-        "/school",
-        "/school/fees",
-        "/school/books",
-        "/school/staff-attendance",
-      ]);
-    }
-    if (role === "admin") {
-      return new Set<string>(navItems.map((i) => i.href));
-    }
-    if (role === "staff") {
-      return new Set<string>([
-        "/school",
-        "/school/staff-attendance",
-      ]);
-    }
-    return new Set<string>(navItems.map((i) => i.href));
-  })();
+  const moduleByHref: Record<string, PermissionModule> = {
+    "/school": "dashboard",
+    "/school/students": "students",
+    "/school/staff": "staff",
+    "/school/classes": "classes",
+    "/school/examinations": "examinations",
+    "/school/attendance": "attendance",
+    "/school/teacher": "dashboard",
+    "/school/staff-attendance": "staff-attendance",
+    "/school/fees": "fees",
+    "/school/payment-verification": "fees.verify",
+    "/school/library": "library",
+    "/school/books": "books",
+    "/school/transport": "transport",
+    "/school/hostel": "hostel",
+    "/school/settings": "branches",
+  };
+
+  const allowedHrefs = new Set<string>(
+    displayNavItems
+      .filter((item) => {
+        const mod = moduleByHref[item.href];
+        if (!mod) return false;
+        return canPermission(role, mod, "read", permissions);
+      })
+      .map((item) => item.href)
+  );
+
+  const fullPath = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  function isChildActive(item: NavItem) {
+    return (item.children ?? []).some((child) => fullPath === child.href);
+  }
+
+  function isMenuOpen(item: NavItem) {
+    if (!item.children || item.children.length === 0) return false;
+    return openMenus[item.href] ?? isChildActive(item);
+  }
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -149,101 +241,219 @@ export function SchoolLayout({
               {schoolName}
             </span>
 
-            {branches.length > 1 && (
-              <div className="hidden md:flex items-center gap-2">
-                <select
-                  value={activeBranchId ?? ""}
-                  onChange={(e) => handleSelectBranch(e.target.value)}
-                  disabled={branchLoading}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                  aria-label="Select branch"
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+            {branches.length > 0 && (
+              <div className="hidden min-w-0 flex-wrap items-center gap-2 lg:flex">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Branch</span>
+                {branches.length === 1 ? (
+                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                    {branches[0].name}
+                    <span className="ml-2 text-slate-500">({branches[0].branchCode})</span>
+                  </span>
+                ) : (
+                  <select
+                    value={activeBranchId ?? ""}
+                    onChange={(e) => handleSelectBranch(e.target.value)}
+                    disabled={branchLoading}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 max-w-[220px]"
+                    aria-label="Select branch"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.branchCode})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {(role === "school_admin" || role === "admin") && (
+                  <Link
+                    href="/school/settings"
+                    className="text-xs font-medium text-primary-600 hover:underline"
+                  >
+                    Manage branches
+                  </Link>
+                )}
               </div>
             )}
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Notifications"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm hover:bg-primary-700 lg:hidden"
+              aria-label="Toggle menu"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            {website && (
-              <a
-                href={website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-school-green px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-              >
-                View Website
-              </a>
-            )}
-            <div className="relative group">
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-school-navy hover:bg-slate-50"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">
-                  {userName.slice(0, 2).toUpperCase()}
-                </span>
-                <span className="hidden sm:inline">{userName}</span>
-                <svg className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              <div className="absolute right-0 top-full z-10 mt-1 hidden w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg group-hover:block">
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-                >
-                  Log out
-                </button>
-              </div>
+            <button
+              type="button"
+              onClick={() => setMenuCollapsed((v) => !v)}
+              className="hidden h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex lg:items-center"
+            >
+              {menuCollapsed ? "Show names" : "Hide names"}
+            </button>
+            <div className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-school-navy lg:flex">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-semibold">
+                {userName.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="hidden sm:inline">{userName}</span>
             </div>
           </div>
+        </div>
+        <div className="h-1 w-full bg-transparent">
+          <div
+            className={`h-full bg-primary-600 transition-[width,opacity] duration-200 ease-out ${
+              routeLoading ? "opacity-100" : "opacity-0"
+            }`}
+            style={{ width: `${routeProgress}%` }}
+            aria-hidden
+          />
         </div>
       </header>
 
       <div className="flex">
+        {mobileMenuOpen && (
+          <button
+            type="button"
+            className="fixed inset-0 z-10 bg-black/30 lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close menu overlay"
+          />
+        )}
         {/* Left sidebar - dark grey */}
-        <aside className="fixed left-0 top-16 z-20 h-[calc(100vh-4rem)] w-64 shrink-0 border-r border-slate-700 bg-school-dark">
-          <nav className="flex flex-col gap-0.5 p-3">
-            {navItems
+        <aside
+          className={`fixed left-0 top-16 z-20 h-[calc(100vh-4rem)] shrink-0 overflow-hidden border-r border-slate-700 bg-school-dark flex flex-col transform transition-all duration-200 ${
+            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          } ${menuCollapsed ? "w-20" : "w-64"} lg:translate-x-0`}
+        >
+          <div className="border-b border-slate-700 px-3 py-3 lg:hidden">
+            <div className={`flex items-center gap-2 ${menuCollapsed ? "justify-center" : ""}`}>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">
+                {userName.slice(0, 2).toUpperCase()}
+              </span>
+              {!menuCollapsed && <span className="truncate text-sm font-medium text-white">{userName}</span>}
+            </div>
+            {!menuCollapsed && branches.length > 0 && (
+              <div className="mt-3">
+                <label className="block text-[11px] uppercase tracking-wide text-slate-400">Branch</label>
+                {branches.length === 1 ? (
+                  <div className="mt-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-100">
+                    {branches[0].name} ({branches[0].branchCode})
+                  </div>
+                ) : (
+                  <select
+                    value={activeBranchId ?? ""}
+                    onChange={(e) => handleSelectBranch(e.target.value)}
+                    disabled={branchLoading}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-100"
+                    aria-label="Select branch"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.branchCode})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
+          <nav
+            className="flex-1 overflow-y-auto flex flex-col gap-0.5 p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {displayNavItems
               .filter((item) => allowedHrefs.has(item.href))
               .map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = pathname === item.href || isChildActive(item);
+                const open = isMenuOpen(item);
+                if (!item.children || item.children.length === 0) {
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        if (pathname !== item.href) startRouteLoading();
+                      }}
+                      className={`flex items-center ${menuCollapsed ? "justify-center" : "justify-between"} rounded-lg px-3 py-2.5 text-sm font-medium text-white transition ${
+                        isActive
+                          ? "bg-primary-600 text-white"
+                          : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                      }`}
+                      title={item.label}
+                    >
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-800 text-xs">
+                        <MenuIcon href={item.href} />
+                      </span>
+                      {!menuCollapsed && <span className="ml-2 flex-1 truncate">{item.label}</span>}
+                      {!menuCollapsed && (
+                        <svg className="h-4 w-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </Link>
+                  );
+                }
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-white transition ${
-                      isActive
-                        ? "bg-primary-600 text-white"
-                        : "text-slate-300 hover:bg-slate-700 hover:text-white"
-                    }`}
-                  >
-                    <span>{item.label}</span>
-                    <svg className="h-4 w-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
+                  <div key={item.href} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenMenus((prev) => ({
+                          ...prev,
+                          [item.href]: !(prev[item.href] ?? isChildActive(item)),
+                        }))
+                      }
+                      className={`flex w-full items-center ${menuCollapsed ? "justify-center" : "justify-between"} rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                        isActive ? "bg-primary-600 text-white" : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                      }`}
+                      title={item.label}
+                    >
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-800 text-xs">
+                        <MenuIcon href={item.href} />
+                      </span>
+                      {!menuCollapsed && <span className="ml-2 flex-1 truncate text-left">{item.label}</span>}
+                      {!menuCollapsed && <span>{open ? "▾" : "▸"}</span>}
+                    </button>
+                    {!menuCollapsed && open && (
+                      <div className="ml-8 space-y-1">
+                        {item.children.map((child) => (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={() => {
+                              setMobileMenuOpen(false);
+                              if (pathname !== child.href) startRouteLoading();
+                            }}
+                            className={`block rounded-md px-3 py-2 text-sm ${
+                              pathname === child.href
+                                ? "bg-primary-700 text-white"
+                                : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                            }`}
+                          >
+                            {child.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
           </nav>
+          <div className="p-3 border-t border-slate-700">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full rounded-lg bg-slate-900/20 px-3 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-900/35"
+            >
+              {menuCollapsed ? "LO" : "Log out"}
+            </button>
+          </div>
         </aside>
 
         {/* Main content */}
-        <main className="min-w-0 flex-1 pl-64">
+        <main className={`min-w-0 flex-1 ${menuCollapsed ? "lg:pl-20" : "lg:pl-64"}`}>
           <div className="p-4 lg:p-6">{children}</div>
         </main>
       </div>

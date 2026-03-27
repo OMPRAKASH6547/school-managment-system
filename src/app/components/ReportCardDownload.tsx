@@ -12,8 +12,10 @@ type ExamData = {
 export function ReportCardDownload({
   slug,
   token,
+  examId,
   schoolName,
   schoolLogo,
+  branchName,
   studentName,
   rollNo,
   className,
@@ -22,8 +24,10 @@ export function ReportCardDownload({
 }: {
   slug: string;
   token: string;
+  examId?: string | null;
   schoolName: string;
   schoolLogo: string | null;
+  branchName: string | null;
   studentName: string;
   rollNo: string | null;
   className: string | null;
@@ -41,8 +45,10 @@ export function ReportCardDownload({
         body: JSON.stringify({
           slug,
           token,
+          examId,
           schoolName,
           schoolLogo,
+          branchName,
           studentName,
           rollNo,
           className,

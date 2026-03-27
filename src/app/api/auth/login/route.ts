@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { verifyPassword, createSession } from "@/lib/auth";
+import { applySessionCookie, createSessionToken, verifyPassword } from "@/lib/auth";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -26,10 +26,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    await createSession(user.id);
+    const token = await createSessionToken(user.id);
     const redirect =
       user.role === "super_admin" ? "/super-admin" : "/school";
-    return NextResponse.json({ ok: true, redirect });
+    const res = NextResponse.json({ ok: true, redirect });
+    applySessionCookie(res, token);
+    return res;
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });

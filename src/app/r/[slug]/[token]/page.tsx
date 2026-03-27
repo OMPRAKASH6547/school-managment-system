@@ -2,13 +2,34 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { ReportCardDownload } from "@/app/components/ReportCardDownload";
+import Image from "next/image";
+
+function formatDateLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatDateUTC(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 export default async function PublicResultPage({
   params,
+  searchParams,
 }: {
   params: { slug: string; token: string };
+  searchParams?: { exam?: string; roll?: string; dob?: string };
 }) {
   const { slug, token } = params;
+  if (token.startsWith("disabled_")) notFound();
+  const examId = searchParams?.exam?.trim();
+  const rollInput = searchParams?.roll?.trim() ?? "";
+  const dobInput = searchParams?.dob?.trim() ?? "";
 
   const org = await prisma.organization.findUnique({
     where: { slug },
@@ -21,17 +42,71 @@ export default async function PublicResultPage({
     where: {
       organizationId: org.id,
       resultToken: token,
-      status: "active",
     },
     include: { class: true },
   });
 
   if (!student) notFound();
+  const branch = student.branchId
+    ? await prisma.branch.findFirst({
+        where: { id: student.branchId, organizationId: org.id },
+        select: { name: true, branchCode: true },
+      })
+    : null;
+
+  const expectedRoll = (student.rollNo ?? "").trim().toLowerCase();
+  const expectedDobLocal = student.dateOfBirth ? formatDateLocal(new Date(student.dateOfBirth)) : "";
+  const expectedDobUtc = student.dateOfBirth ? formatDateUTC(new Date(student.dateOfBirth)) : "";
+  const dobMatches = !!dobInput && (dobInput === expectedDobLocal || dobInput === expectedDobUtc);
+  const verified =
+    !!expectedRoll &&
+    !!(expectedDobLocal || expectedDobUtc) &&
+    rollInput.toLowerCase() === expectedRoll &&
+    dobMatches;
+
+  if (!verified) {
+    return (
+      <div className="min-h-screen bg-slate-100 py-8 px-4">
+        <div className="mx-auto max-w-xl rounded-xl bg-white p-6 shadow">
+          <div className="mb-4 flex items-center gap-3">
+            {org.logo ? (
+              <div className="relative h-12 w-12 overflow-hidden rounded-full border border-slate-200">
+                <Image src={org.logo} alt={org.name} fill className="object-contain" />
+              </div>
+            ) : null}
+            <div>
+              <h1 className="text-xl font-bold">{org.name}</h1>
+              {branch ? <p className="text-xs text-slate-500">{branch.name} ({branch.branchCode})</p> : null}
+            </div>
+          </div>
+          <h2 className="text-base font-semibold text-slate-900">Verify student details to view result</h2>
+          <p className="mt-1 text-sm text-slate-600">Enter roll number and date of birth.</p>
+          <form method="get" className="mt-4 space-y-3">
+            {examId ? <input type="hidden" name="exam" value={examId} /> : null}
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Roll number</label>
+              <input name="roll" defaultValue={rollInput} className="input-field mt-1" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Date of birth</label>
+              <input type="date" name="dob" defaultValue={dobInput} className="input-field mt-1" required />
+            </div>
+            <button type="submit" className="btn-primary">Show result</button>
+          </form>
+          {(rollInput || dobInput) && !verified ? (
+            <p className="mt-3 text-sm text-red-600">Invalid roll number or date of birth.</p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   const exams = await prisma.exam.findMany({
     where: {
       organizationId: org.id,
+      branchId: student.branchId ?? undefined,
       status: "published",
+      ...(examId ? { id: examId } : {}),
     },
     orderBy: { createdAt: "desc" },
     include: {
@@ -59,7 +134,17 @@ export default async function PublicResultPage({
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">
       <div className="mx-auto max-w-2xl bg-white p-6 rounded-xl shadow">
-        <h1 className="text-xl font-bold mb-4">{org.name}</h1>
+        <div className="mb-4 flex items-center gap-3">
+          {org.logo ? (
+            <div className="relative h-12 w-12 overflow-hidden rounded-full border border-slate-200">
+              <Image src={org.logo} alt={org.name} fill className="object-contain" />
+            </div>
+          ) : null}
+          <div>
+            <h1 className="text-xl font-bold">{org.name}</h1>
+            {branch ? <p className="text-xs text-slate-500">{branch.name} ({branch.branchCode})</p> : null}
+          </div>
+        </div>
 
         <h2 className="text-lg font-semibold">
           {student.firstName} {student.lastName}
@@ -113,8 +198,10 @@ export default async function PublicResultPage({
           <ReportCardDownload
             slug={slug}
             token={token}
+            examId={examId ?? null}
             schoolName={org.name}
             schoolLogo={org.logo ?? null}
+            branchName={branch ? `${branch.name} (${branch.branchCode})` : null}
             studentName={`${student.firstName} ${student.lastName}`}
             rollNo={student.rollNo ?? null}
             className={student.class?.name ?? null}
@@ -123,9 +210,6 @@ export default async function PublicResultPage({
           />
         </div>
 
-        <p className="mt-6 text-sm text-center">
-          <Link href="/">Back</Link>
-        </p>
       </div>
     </div>
   );

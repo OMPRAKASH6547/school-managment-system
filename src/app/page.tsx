@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
+import { AppLogo } from "@/components/AppLogo";
 
 export default async function HomePage() {
   const session = await getSession();
@@ -8,7 +9,7 @@ export default async function HomePage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-primary-900 to-slate-900 text-white">
       <nav className="border-b border-white/10 bg-black/20 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <span className="text-xl font-bold tracking-tight">SchoolSaaS</span>
+          <AppLogo dark compact />
           <div className="flex items-center gap-4">
             {session ? (
               <Link
@@ -39,6 +40,9 @@ export default async function HomePage() {
 
       <main className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div className="text-center">
+          <div className="mb-8 flex justify-center">
+            <AppLogo dark className="text-center" />
+          </div>
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl">
             School & Coaching Management
             <span className="block text-primary-400">on one platform</span>

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
   organizationId: z.string(),
+  studentId: z.string().nullable().optional(),
+  bookSetId: z.string().nullable().optional(),
   customerName: z.string().nullable().optional(),
   customerPhone: z.string().nullable().optional(),
   items: z.array(z.object({ productId: z.string(), quantity: z.number().int().min(1) })),
@@ -18,9 +20,28 @@ export async function POST(req: NextRequest) {
     requirePermission(session, "books", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
+    const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
     const data = bodySchema.parse(await req.json());
     if (data.organizationId !== orgId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    let studentId: string | null = null;
+    if (data.studentId) {
+      const st = await prisma.student.findFirst({
+        where: { id: data.studentId, organizationId: orgId, branchId },
+      });
+      if (!st) return NextResponse.json({ error: "Invalid student" }, { status: 400 });
+      studentId = st.id;
+    }
+
+    let bookSetId: string | null = null;
+    if (data.bookSetId) {
+      const set = await prisma.bookSet.findFirst({
+        where: { id: data.bookSetId, organizationId: orgId, branchId, isActive: true },
+        select: { id: true },
+      });
+      if (!set) return NextResponse.json({ error: "Invalid book set" }, { status: 400 });
+      bookSetId = set.id;
+    }
 
     let totalAmount = 0;
     const saleItems: { productId: string; quantity: number; unitPrice: number; amount: number }[] = [];
@@ -47,6 +68,8 @@ export async function POST(req: NextRequest) {
       data: {
         organizationId: orgId,
         branchId,
+        studentId,
+        bookSetId,
         invoiceNo,
         totalAmount,
         customerName: data.customerName ?? null,
@@ -64,7 +87,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    for (const item of data.items) {
+    for (const item of saleItems) {
       await prisma.bookProduct.update({
         where: { id: item.productId },
         data: { stock: { decrement: item.quantity } },

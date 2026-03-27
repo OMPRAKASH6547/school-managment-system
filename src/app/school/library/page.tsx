@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getSession, getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 
@@ -9,11 +9,35 @@ export default async function LibraryPage() {
   if (session?.role === "staff") redirect("/school/staff-attendance");
   if (session?.role === "accountant") redirect("/school");
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const branchId = await getResolvedBranchIdForSchool(session);
   const books = await prisma.libraryBook.findMany({
-    where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
+    where: { organizationId: orgId, branchId },
     orderBy: { title: "asc" },
   });
+  const activeIssues = await prisma.libraryIssue.findMany({
+    // Include legacy rows that may not have org/branch populated.
+    where: { status: "issued", bookId: { in: books.map((b) => b.id) } },
+    select: { bookId: true, studentId: true },
+  });
+  const studentIds = [...new Set(activeIssues.map((i) => i.studentId).filter(Boolean))] as string[];
+  const students = studentIds.length
+    ? await prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        select: { id: true, firstName: true, lastName: true, rollNo: true },
+      })
+    : [];
+  const studentById = new Map(
+    students.map((s) => [s.id, `${s.firstName} ${s.lastName}`.trim() + (s.rollNo ? ` (${s.rollNo})` : "")])
+  );
+  const activeUsersByBook = new Map<string, string[]>();
+  for (const issue of activeIssues) {
+    if (!issue.studentId) continue;
+    const label = studentById.get(issue.studentId);
+    if (!label) continue;
+    const prev = activeUsersByBook.get(issue.bookId) ?? [];
+    prev.push(label);
+    activeUsersByBook.set(issue.bookId, prev);
+  }
 
   return (
     <>
@@ -37,6 +61,7 @@ export default async function LibraryPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Author</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Available</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Total</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Currently using</th>
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase text-slate-500">Actions</th>
               </tr>
             </thead>
@@ -47,6 +72,18 @@ export default async function LibraryPage() {
                   <td className="px-6 py-4 text-slate-600">{b.author ?? "—"}</td>
                   <td className="px-6 py-4 text-slate-600">{b.availableCopies}</td>
                   <td className="px-6 py-4 text-slate-600">{b.totalCopies}</td>
+                  <td className="px-6 py-4 text-slate-600">
+                    {(activeUsersByBook.get(b.id) ?? []).length === 0 ? (
+                      "—"
+                    ) : (
+                      <span className="text-xs sm:text-sm">
+                        {(activeUsersByBook.get(b.id) ?? []).slice(0, 2).join(", ")}
+                        {(activeUsersByBook.get(b.id) ?? []).length > 2
+                          ? ` +${(activeUsersByBook.get(b.id) ?? []).length - 2} more`
+                          : ""}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <Link href={`/school/library/${b.id}`} className="text-sm text-primary-600 hover:underline">Issue / Return</Link>
                   </td>

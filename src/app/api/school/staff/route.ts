@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization, hashPassword } from "@/lib/auth";
+import { getSession, requireOrganization, hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { requirePermission } from "@/lib/permissions";
 
 const bodySchema = z.object({
+  branchId: z.string().min(1),
   employeeId: z.string().optional(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
@@ -16,6 +17,16 @@ const bodySchema = z.object({
   joinDate: z.string().nullable().optional(),
   salary: z.number().nullable().optional(),
   status: z.string().optional(),
+  classIds: z.array(z.string().min(1)).optional(),
+  classSubjects: z.record(z.string()).optional(),
+  moduleAccess: z.record(
+    z.object({
+      view: z.boolean().optional(),
+      add: z.boolean().optional(),
+      edit: z.boolean().optional(),
+      delete: z.boolean().optional(),
+    })
+  ).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -24,7 +35,6 @@ export async function POST(req: NextRequest) {
     requirePermission(session, "staff", "write");
     requireOrganization(session);
     const orgId = session.organizationId!;
-    const branchId = await requireBranchAccess(orgId, await getSelectedBranchId());
 
     const raw = await req.json();
     const data = bodySchema.parse({
@@ -38,11 +48,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email already used for another login" }, { status: 400 });
     }
 
+    const targetBranch = await prisma.branch.findFirst({
+      where: { id: data.branchId, organizationId: orgId },
+      select: { id: true },
+    });
+    if (!targetBranch) {
+      return NextResponse.json({ error: "Invalid branch" }, { status: 400 });
+    }
+
+    const generateEmployeeId = async (): Promise<string> => {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const code = `EMP-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+        const exists = await prisma.staff.findFirst({
+          where: { organizationId: orgId, employeeId: code },
+          select: { id: true },
+        });
+        if (!exists) return code;
+      }
+      return `EMP-${Date.now()}`;
+    };
+    const employeeId = data.employeeId?.trim() ? data.employeeId.trim() : await generateEmployeeId();
+
     // Generate temporary password for staff login.
     const plainPassword = randomBytes(8).toString("base64url");
     const passwordHash = await hashPassword(plainPassword);
 
     const userRole = data.role;
+    const permissionsJson = data.moduleAccess ? JSON.stringify(data.moduleAccess) : null;
 
     await prisma.user.create({
       data: {
@@ -52,29 +84,89 @@ export async function POST(req: NextRequest) {
         role: userRole,
         organizationId: orgId,
         phone: data.phone ?? null,
+        permissionsJson,
         isActive: true,
         emailVerified: false,
       },
     });
 
-    await prisma.staff.create({
-      data: {
-        organizationId: orgId,
-        branchId,
-        employeeId: data.employeeId || null,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phone: data.phone || null,
-        role: data.role,
-        designation: data.designation || null,
-        joinDate: data.joinDate ? new Date(data.joinDate) : null,
-        salary: data.salary ?? null,
-        status: data.status || "active",
-      },
-    });
+    let createdStaff;
+    try {
+      createdStaff = await prisma.staff.create({
+        data: {
+          organizationId: orgId,
+          branchId: targetBranch.id,
+          employeeId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phone: data.phone || null,
+          role: data.role,
+          designation: data.designation || null,
+          generatedLoginPassword: plainPassword,
+          joinDate: data.joinDate ? new Date(data.joinDate) : null,
+          salary: data.salary ?? null,
+          status: data.status || "active",
+        } as any,
+      });
+    } catch {
+      // Backward compatibility when Prisma client/schema is not yet updated.
+      createdStaff = await prisma.staff.create({
+        data: {
+          organizationId: orgId,
+          branchId: targetBranch.id,
+          employeeId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phone: data.phone || null,
+          role: data.role,
+          designation: data.designation || null,
+          joinDate: data.joinDate ? new Date(data.joinDate) : null,
+          salary: data.salary ?? null,
+          status: data.status || "active",
+        },
+      });
+    }
 
-    return NextResponse.json({ ok: true, password: plainPassword });
+    if (data.role === "teacher" && (data.classIds?.length ?? 0) > 0) {
+      const uniqueClassIds = Array.from(new Set(data.classIds ?? []));
+      const validClasses = await prisma.class.findMany({
+        where: {
+          organizationId: orgId,
+          branchId: targetBranch.id,
+          status: "active",
+          id: { in: uniqueClassIds },
+        },
+        select: { id: true },
+      });
+      for (const cls of validClasses) {
+        const subjectText = data.classSubjects?.[cls.id]?.trim() || null;
+        try {
+          await prisma.teacherAssignment.create({
+            data: {
+              organizationId: orgId,
+              branchId: targetBranch.id,
+              teacherStaffId: createdStaff.id,
+              classId: cls.id,
+              ...(subjectText ? ({ subjects: subjectText } as any) : {}),
+            } as any,
+          });
+        } catch {
+          // Backward compatibility when Prisma client/schema is not updated with subjects.
+          await prisma.teacherAssignment.create({
+            data: {
+              organizationId: orgId,
+              branchId: targetBranch.id,
+              teacherStaffId: createdStaff.id,
+              classId: cls.id,
+            },
+          });
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true, password: plainPassword, employeeId });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });

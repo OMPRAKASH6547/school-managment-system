@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
@@ -8,7 +8,7 @@ const bodySchema = z.object({
   organizationId: z.string(),
   name: z.string().min(1),
   examType: z.string(),
-  classId: z.string().nullable().optional(),
+  classId: z.string().min(1),
   academicYear: z.string().optional(),
   subjects: z.array(z.object({ name: z.string().min(1), maxMarks: z.number() })),
 });
@@ -23,7 +23,19 @@ export async function POST(req: NextRequest) {
     if (data.organizationId !== session.organizationId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const branchId = await requireBranchAccess(session.organizationId!, await getSelectedBranchId());
+    const cookieBranchId = await resolveBranchIdForOrganization(
+      session.organizationId!,
+      await getSelectedBranchId()
+    );
+    const selectedClass = await prisma.class.findFirst({
+      where: { id: data.classId, organizationId: data.organizationId, status: "active" },
+      select: { id: true, branchId: true },
+    });
+    if (!selectedClass) {
+      return NextResponse.json({ error: "Invalid class" }, { status: 400 });
+    }
+    // Use class branch when available to avoid cookie/branch mismatch failures.
+    const branchId = selectedClass.branchId ?? cookieBranchId;
 
     const exam = await prisma.exam.create({
       data: {
@@ -31,7 +43,7 @@ export async function POST(req: NextRequest) {
         branchId,
         name: data.name,
         examType: data.examType,
-        classId: data.classId ?? null,
+        classId: data.classId,
         academicYear: data.academicYear ?? null,
         status: "draft",
         subjects: {
@@ -54,6 +66,9 @@ export async function POST(req: NextRequest) {
     }
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+    if (e instanceof Error) {
+      return NextResponse.json({ error: e.message || "Failed" }, { status: 500 });
     }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

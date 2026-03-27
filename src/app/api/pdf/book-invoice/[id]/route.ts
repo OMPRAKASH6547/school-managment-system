@@ -3,7 +3,7 @@ import { z } from "zod";
 import QRCode from "qrcode";
 import { pdf } from "@react-pdf/renderer";
 import { prisma } from "@/lib/db";
-import { getSession, getSelectedBranchId, requireBranchAccess, requireOrganization } from "@/lib/auth";
+import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createInvoiceDocument } from "@/lib/pdf/BookInvoice";
 import { requirePermission } from "@/lib/permissions";
 
@@ -18,7 +18,7 @@ export async function GET(
 
     const orgId = session.organizationId!;
     const selectedBranchId = await getSelectedBranchId();
-    const branchId = await requireBranchAccess(orgId, selectedBranchId);
+    const branchId = await resolveBranchIdForOrganization(orgId, selectedBranchId);
 
     const { id } = await params;
 
@@ -26,6 +26,7 @@ export async function GET(
       where: { id, organizationId: orgId, branchId },
       include: {
         items: { include: { product: true } },
+        bookSet: { select: { id: true, name: true } },
         organization: { select: { id: true, name: true, logo: true, address: true, phone: true, email: true, website: true } },
       },
     });

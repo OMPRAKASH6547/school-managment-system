@@ -14,6 +14,7 @@ export interface SessionUser {
   name: string;
   role: UserRole;
   organizationId: string | null;
+  permissions?: Record<string, { view?: boolean; add?: boolean; edit?: boolean; delete?: boolean }> | null;
 }
 
 export type OrganizationStatus = "pending" | "approved" | "rejected" | "suspended";

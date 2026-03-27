@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSession, getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { MarksEntryForm } from "@/app/components/MarksEntryForm";
 
@@ -11,14 +11,28 @@ export default async function ExamDetailPage({
 }) {
   const session = await getSession();
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const cookieBranchId = await getResolvedBranchIdForSchool(session);
   const { id } = await params;
+  const staffTeacher =
+    session?.role === "staff"
+      ? await prisma.staff.findFirst({
+          where: {
+            email: session.email,
+            organizationId: orgId,
+            branchId: cookieBranchId,
+            role: "teacher",
+            status: "active",
+          },
+          select: { id: true, role: true },
+        })
+      : null;
+  const isTeacherUser = session?.role === "teacher" || !!staffTeacher;
 
-  if (session?.role === "staff") redirect("/school/staff-attendance");
+  if (session?.role === "staff" && !staffTeacher) redirect("/school/staff-attendance");
   if (session?.role === "accountant") redirect("/school");
 
   const exam = await prisma.exam.findFirst({
-    where: branchId ? { id, organizationId: orgId, branchId } : { id, organizationId: orgId },
+    where: { id, organizationId: orgId },
     include: {
       subjects: { orderBy: { order: "asc" } },
       results: true,
@@ -26,13 +40,30 @@ export default async function ExamDetailPage({
   });
   if (!exam) notFound();
 
+  // Use the exam class's branch as the source of truth for marks entry.
+  const classBranchId = exam.classId
+    ? await prisma.class.findFirst({
+        where: { id: exam.classId, organizationId: orgId },
+        select: { branchId: true },
+      })
+    : null;
+  const effectiveBranchId = classBranchId?.branchId ?? exam.branchId ?? cookieBranchId;
+
   // Teacher can only view/manage marks for classes they are assigned to.
-  if (session?.role === "teacher") {
-    if (!exam.classId || !branchId) return notFound();
-    const teacherStaff = await prisma.staff.findFirst({
-      where: { email: session.email, organizationId: orgId, branchId, role: "teacher" },
-      select: { id: true, role: true },
-    });
+  if (isTeacherUser) {
+    if (!exam.classId || !effectiveBranchId) return notFound();
+    const teacherStaff = staffTeacher
+      ? staffTeacher
+      : await prisma.staff.findFirst({
+          where: {
+            email: session!.email,
+            organizationId: orgId,
+            branchId: effectiveBranchId,
+            role: "teacher",
+            status: "active",
+          },
+          select: { id: true, role: true },
+        });
     if (!teacherStaff || teacherStaff.role !== "teacher") return notFound();
 
     const assignment = await prisma.teacherAssignment.findFirst({
@@ -40,7 +71,7 @@ export default async function ExamDetailPage({
         teacherStaffId: teacherStaff.id,
         classId: exam.classId,
         organizationId: orgId,
-        branchId,
+        branchId: effectiveBranchId,
       },
       select: { id: true },
     });
@@ -50,9 +81,8 @@ export default async function ExamDetailPage({
   const students = await prisma.student.findMany({
     where: {
       organizationId: orgId,
-      ...(branchId ? { branchId } : {}),
-      status: "active",
       ...(exam.classId ? { classId: exam.classId } : {}),
+      ...(effectiveBranchId ? { branchId: effectiveBranchId } : {}),
     },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     include: { class: true },
@@ -71,6 +101,11 @@ export default async function ExamDetailPage({
       </div>
       <p className="mt-1 text-slate-600">{exam.examType} · {exam.subjects.length} subjects</p>
       <div className="mt-6">
+        {students.length === 0 ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            No students found for this exam class in the selected branch.
+          </div>
+        ) : null}
         <MarksEntryForm exam={exam} students={students} canPublish={session?.role === "school_admin" || session?.role === "admin"} />
       </div>
     </>

@@ -1,5 +1,4 @@
-import { getSession } from "@/lib/auth";
-import { getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AttendanceForm } from "@/app/components/AttendanceForm";
 import { redirect } from "next/navigation";
@@ -7,7 +6,7 @@ import { redirect } from "next/navigation";
 export default async function SchoolAttendancePage() {
   const session = await getSession();
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const branchId = await getResolvedBranchIdForSchool(session);
 
   if (session?.role === "staff") redirect("/school/staff-attendance");
   if (session?.role === "accountant") redirect("/school");
@@ -53,12 +52,12 @@ export default async function SchoolAttendancePage() {
 
   const [students, classes] = await Promise.all([
     prisma.student.findMany({
-      where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
+      where: { organizationId: orgId, branchId, status: "active" },
       orderBy: [{ classId: "asc" }, { lastName: "asc" }, { firstName: "asc" }],
       include: { class: true },
     }),
     prisma.class.findMany({
-      where: branchId ? { organizationId: orgId, branchId, status: "active" } : { organizationId: orgId, status: "active" },
+      where: { organizationId: orgId, branchId, status: "active" },
       orderBy: { name: "asc" },
     }),
   ]);

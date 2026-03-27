@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { AppLogo } from "@/components/AppLogo";
 
 interface NavItem {
   href: string;
@@ -30,8 +31,8 @@ export function DashboardLayout({ children, title, nav, role }: DashboardLayoutP
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-2 sm:px-4 md:px-6 lg:px-8">
           <div className="flex items-center gap-4 sm:gap-8 w-full">
-            <Link href={role === "super_admin" ? "/super-admin" : "/school"} className="text-base sm:text-lg font-bold text-primary-600 whitespace-nowrap">
-              SchoolSaaS
+            <Link href={role === "super_admin" ? "/super-admin" : "/school"} className="whitespace-nowrap">
+              <AppLogo compact />
             </Link>
             <nav className="hidden gap-1 sm:flex flex-wrap">
               {nav.map((item) => (

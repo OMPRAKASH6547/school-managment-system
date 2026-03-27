@@ -1,14 +1,32 @@
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/types";
 import * as bcrypt from "bcryptjs";
 
-const SESSION_COOKIE = "school_saas_session";
-const BRANCH_COOKIE = "school_saas_branch";
+export const SESSION_COOKIE = "school_saas_session";
+export const BRANCH_COOKIE = "school_saas_branch";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 const COOKIES_SECURE =
   (process.env.NEXTAUTH_URL ?? "").startsWith("https://") ||
   (process.env.NEXT_PUBLIC_BASE_URL ?? "").startsWith("https://");
+
+/** Use with `NextResponse.cookies.set` in Route Handlers — `cookies().set` is not available in Next.js 15+. */
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: COOKIES_SECURE,
+  sameSite: "lax" as const,
+  maxAge: SESSION_MAX_AGE,
+  path: "/",
+};
+
+export const BRANCH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: COOKIES_SECURE,
+  sameSite: "lax" as const,
+  maxAge: SESSION_MAX_AGE,
+  path: "/",
+};
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -18,29 +36,46 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export async function createSession(userId: string): Promise<string> {
+/** Builds session token; caller must attach it with `res.cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS)`. */
+export async function createSessionToken(userId: string): Promise<string> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, name: true, role: true, organizationId: true, isActive: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      organizationId: true,
+      isActive: true,
+      permissionsJson: true,
+    },
   });
   if (!user || !user.isActive) throw new Error("User not found or inactive");
+  let permissions: SessionUser["permissions"] = null;
+  if (user.permissionsJson) {
+    try {
+      permissions = JSON.parse(user.permissionsJson);
+    } catch {
+      permissions = null;
+    }
+  }
   const payload: SessionUser = {
     id: user.id,
     email: user.email,
     name: user.name,
     role: user.role as SessionUser["role"],
     organizationId: user.organizationId,
+    permissions,
   };
-  const token = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: COOKIES_SECURE,
-    sameSite: "lax",
-    maxAge: SESSION_MAX_AGE,
-    path: "/",
-  });
-  return token;
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+
+export function applySessionCookie(res: NextResponse, token: string): void {
+  res.cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
+}
+
+export function applyBranchCookie(res: NextResponse, branchId: string): void {
+  res.cookies.set(BRANCH_COOKIE, branchId, BRANCH_COOKIE_OPTIONS);
 }
 
 export async function getSession(): Promise<SessionUser | null> {
@@ -56,9 +91,8 @@ export async function getSession(): Promise<SessionUser | null> {
   return null;
 }
 
-export async function destroySession(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
+export function clearSessionCookie(res: NextResponse): void {
+  res.cookies.set(SESSION_COOKIE, "", { ...SESSION_COOKIE_OPTIONS, maxAge: 0 });
 }
 
 export function requireSuperAdmin(session: SessionUser | null): asserts session is SessionUser {
@@ -78,31 +112,52 @@ export function requireOrganization(session: SessionUser | null): asserts sessio
   if (!session?.organizationId) throw new Error("No organization assigned");
 }
 
-export async function setSelectedBranch(branchId: string): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(BRANCH_COOKIE, branchId, {
-    httpOnly: true,
-    secure: COOKIES_SECURE,
-    sameSite: "lax",
-    maxAge: SESSION_MAX_AGE,
-    path: "/",
-  });
-}
-
 export async function getSelectedBranchId(): Promise<string | null> {
   const cookieStore = await cookies();
   return cookieStore.get(BRANCH_COOKIE)?.value ?? null;
 }
 
-export async function requireBranchAccess(
+/**
+ * Resolves which branch to use for tenant APIs when the cookie may be missing
+ * (common right after login). Falls back to the organization’s first branch.
+ */
+export async function resolveBranchIdForOrganization(
   organizationId: string,
-  branchId: string | null | undefined
+  preferredBranchId: string | null | undefined
 ): Promise<string> {
-  if (!branchId) throw new Error("No branch selected");
+  if (preferredBranchId) {
+    const branch = await prisma.branch.findFirst({
+      where: { id: preferredBranchId, organizationId },
+      select: { id: true },
+    });
+    if (branch) return branch.id;
+  }
+  const first = await prisma.branch.findFirst({
+    where: { organizationId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!first) throw new Error("No branch selected");
+  return first.id;
+}
+
+/** Use when the client explicitly picks a branch (e.g. select-branch API). */
+export async function assertBranchInOrganization(
+  organizationId: string,
+  branchId: string
+): Promise<string> {
   const branch = await prisma.branch.findFirst({
     where: { id: branchId, organizationId },
     select: { id: true },
   });
   if (!branch) throw new Error("Invalid branch for organization");
   return branch.id;
+}
+
+/** Server pages: same resolution as school APIs (cookie optional). */
+export async function getResolvedBranchIdForSchool(session: {
+  organizationId: string | null | undefined;
+} | null): Promise<string> {
+  if (!session?.organizationId) throw new Error("No organization");
+  return resolveBranchIdForOrganization(session.organizationId, await getSelectedBranchId());
 }

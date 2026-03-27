@@ -1,22 +1,32 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSession, getSelectedBranchId } from "@/lib/auth";
+import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export default async function ExaminationsPage() {
   const session = await getSession();
   const orgId = session?.organizationId!;
-  const branchId = await getSelectedBranchId();
+  const branchId = await getResolvedBranchIdForSchool(session);
+  const staffTeacher =
+    session?.role === "staff"
+      ? await prisma.staff.findFirst({
+          where: { email: session.email, organizationId: orgId, branchId, role: "teacher", status: "active" },
+          select: { id: true },
+        })
+      : null;
+  const isTeacherUser = session?.role === "teacher" || !!staffTeacher;
 
   let exams;
-  if (session?.role === "staff") redirect("/school/staff-attendance");
+  if (session?.role === "staff" && !staffTeacher) redirect("/school/staff-attendance");
   if (session?.role === "accountant") redirect("/school");
-  if (session?.role === "teacher") {
+  if (isTeacherUser) {
     if (!branchId) return [];
-    const teacherStaff = await prisma.staff.findFirst({
-      where: { email: session.email, organizationId: orgId, branchId, role: "teacher" },
-      select: { id: true },
-    });
+    const teacherStaff = staffTeacher
+      ? staffTeacher
+      : await prisma.staff.findFirst({
+          where: { email: session!.email, organizationId: orgId, branchId, role: "teacher", status: "active" },
+          select: { id: true },
+        });
     if (!teacherStaff) return notFound();
 
     const assigned = await prisma.teacherAssignment.findMany({
@@ -36,7 +46,7 @@ export default async function ExaminationsPage() {
     }
   } else {
     exams = await prisma.exam.findMany({
-      where: branchId ? { organizationId: orgId, branchId } : { organizationId: orgId },
+      where: { organizationId: orgId, branchId },
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { results: true } }, subjects: true },
     });

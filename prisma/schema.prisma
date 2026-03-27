@@ -41,7 +41,10 @@ model Organization {
   libraryBooks    LibraryBook[]
   hostelRooms     HostelRoom[]
   bookProducts    BookProduct[]
+  bookSets        BookSet[]
   bookSales       BookSale[]
+  transportRoutes   TransportRoute[]
+  transportVehicles TransportVehicle[]
 
   branches        Branch[]
 }
@@ -75,6 +78,7 @@ model User {
   organizationId String?
   phone         String?
   avatar        String?
+  permissionsJson String?
   isActive      Boolean   @default(true)
   emailVerified Boolean   @default(false)
   createdAt     DateTime  @default(now())
@@ -121,7 +125,10 @@ model Student {
   id             String   @id @default(cuid()) @map("_id")
   organizationId String
   branchId       String?
+  createdBy      String?
   rollNo         String?
+  aadhaarNo      String?
+  bloodGroup     String?
   firstName      String
   lastName       String
   email          String?
@@ -143,6 +150,9 @@ model Student {
   attendances    Attendance[]
   feePayments    Payment[]
   examResults    ExamResult[]
+  bookSales      BookSale[]
+  transportAssignments TransportStudentAssignment[]
+  hostelAllocations    HostelAllocation[]
 }
 
 model Staff {
@@ -156,6 +166,8 @@ model Staff {
   phone          String?
   role           String   // teacher, accountant, admin, etc.
   designation    String?
+  // Admin-facing copy of the initially generated login password.
+  generatedLoginPassword String?
   joinDate       DateTime?
   salary         Float?
   status         String   @default("active")
@@ -164,6 +176,8 @@ model Staff {
 
   organization Organization?   @relation(fields: [organizationId], references: [id])
   staffAttendances StaffAttendance[]
+  paymentsReceived Payment[] @relation("StaffPayer")
+  paymentsCollected Payment[] @relation("CollectorStaff")
 }
 
 model Class {
@@ -171,6 +185,7 @@ model Class {
   organizationId String
   branchId       String?
   name           String   // e.g. "Class 10-A", "JEE Batch 1"
+  subjects       String?  // comma-separated subjects configured for this class
   section        String?
   academicYear   String?
   capacity       Int?
@@ -188,6 +203,7 @@ model FeePlan {
   organizationId String
   branchId       String?
   name           String   // e.g. "Monthly Tuition", "Annual Fee"
+  payerType      String   @default("student") // student | staff
   amount         Float
   frequency      String   // one_time | monthly | quarterly | yearly
   classId        String?  // optional: class-specific fee
@@ -203,7 +219,9 @@ model Payment {
   id             String    @id @default(cuid()) @map("_id")
   organizationId String
   branchId       String?
-  studentId      String
+  studentId      String?
+  staffId        String?
+  payerType      String    @default("student") // student | staff
   amount         Float
   paidAt         DateTime  @default(now())
   method         String    // cash | card | upi | bank_transfer
@@ -211,6 +229,8 @@ model Payment {
   status         String    @default("pending") // pending | verified | refunded
   verifiedAt     DateTime? // set when school/coaching admin verifies; receipt only then
   verifiedBy     String?   // user id who verified
+  verifiedByName String?
+  collectedByStaffId String?
   feePlanId      String?
   notes          String?
   createdAt      DateTime  @default(now())
@@ -218,6 +238,8 @@ model Payment {
 
   organization Organization? @relation(fields: [organizationId], references: [id])
   student      Student?     @relation(fields: [studentId], references: [id])
+  staff        Staff?       @relation("StaffPayer", fields: [staffId], references: [id])
+  collectedBy  Staff?       @relation("CollectorStaff", fields: [collectedByStaffId], references: [id])
 }
 
 model Attendance {
@@ -297,6 +319,7 @@ model TeacherAssignment {
   branchId       String
   teacherStaffId String
   classId        String
+  subjects       String?  // comma-separated subjects for this class assignment
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -398,7 +421,8 @@ model HostelAllocation {
   toDate    DateTime?
   status    String    @default("active")
 
-  room HostelRoom? @relation(fields: [roomId], references: [id])
+  room    HostelRoom? @relation(fields: [roomId], references: [id])
+  student Student?    @relation(fields: [studentId], references: [id])
 }
 
 // ============ BOOK SELLING ============
@@ -417,12 +441,15 @@ model BookProduct {
 
   organization Organization? @relation(fields: [organizationId], references: [id])
   sales         BookSaleItem[]
+  setItems      BookSetItem[]
 }
 
 model BookSale {
   id             String   @id @default(cuid()) @map("_id")
   organizationId String
   branchId       String?
+  studentId      String?
+  bookSetId      String?
   invoiceNo      String?
   soldAt         DateTime @default(now())
   totalAmount    Float
@@ -433,6 +460,8 @@ model BookSale {
   updatedAt      DateTime @updatedAt
 
   organization Organization? @relation(fields: [organizationId], references: [id])
+  student      Student?      @relation(fields: [studentId], references: [id])
+  bookSet      BookSet?      @relation(fields: [bookSetId], references: [id])
   items         BookSaleItem[]
 }
 
@@ -448,4 +477,89 @@ model BookSaleItem {
 
   sale    BookSale?     @relation(fields: [saleId], references: [id])
   product BookProduct?  @relation(fields: [productId], references: [id])
+}
+
+model BookSet {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String?
+  classId        String?
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  items        BookSetItem[]
+  sales        BookSale[]
+}
+
+model BookSetItem {
+  id             String   @id @default(cuid()) @map("_id")
+  setId          String
+  productId      String
+  organizationId String?
+  branchId       String?
+  quantity       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  set     BookSet?     @relation(fields: [setId], references: [id])
+  product BookProduct? @relation(fields: [productId], references: [id])
+}
+
+// ============ TRANSPORT ============
+model TransportRoute {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String?
+  name           String
+  description    String?
+  fromPlace      String?
+  toPlace        String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vehicles     TransportVehicle[]
+  assignments  TransportStudentAssignment[]
+}
+
+model TransportVehicle {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String?
+  routeId        String?
+  label          String
+  registrationNo String?
+  capacity       Int      @default(40)
+  driverName     String?
+  driverPhone    String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  route        TransportRoute? @relation(fields: [routeId], references: [id])
+  assignments  TransportStudentAssignment[]
+}
+
+model TransportStudentAssignment {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String?
+  studentId      String
+  routeId        String
+  vehicleId      String?
+  pickupPoint    String?
+  dropPoint      String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  student Student         @relation(fields: [studentId], references: [id])
+  route   TransportRoute  @relation(fields: [routeId], references: [id])
+  vehicle TransportVehicle? @relation(fields: [vehicleId], references: [id])
 }

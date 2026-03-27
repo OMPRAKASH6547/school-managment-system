@@ -3,15 +3,16 @@ import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/render
 
 export function createFeeCardDocument({
   org,
-  student,
+  payer,
   payment,
   qrDataUrl,
   acceptedByName,
 }: {
   org: { name: string; logo: string | null; address: string | null; phone: string | null; email: string | null };
-  student: { firstName: string; lastName: string; rollNo: string | null };
+  payer: { type: "student" | "staff"; firstName: string; lastName: string; code: string | null };
   payment: {
     id: string;
+    payerType: string;
     amount: number;
     paidAt: Date;
     method: string;
@@ -138,9 +139,9 @@ export function createFeeCardDocument({
         <View style={styles.section}>
           <Text style={styles.label}>Receipt for</Text>
           <Text style={styles.value}>
-            {student.firstName} {student.lastName}
+            {payer.firstName} {payer.lastName}
           </Text>
-          <Text style={styles.muted}>Roll No: {student.rollNo ?? "-"}</Text>
+          <Text style={styles.muted}>{payer.type === "student" ? "Roll No" : "Employee ID"}: {payer.code ?? "-"}</Text>
         </View>
 
         <View style={styles.table}>

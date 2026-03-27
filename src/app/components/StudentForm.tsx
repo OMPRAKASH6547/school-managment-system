@@ -8,6 +8,8 @@ type Class = { id: string; name: string };
 type Student = {
   id: string;
   rollNo: string | null;
+  aadhaarNo: string | null;
+  bloodGroup: string | null;
   firstName: string;
   lastName: string;
   email: string | null;
@@ -35,7 +37,8 @@ export function StudentForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
-    rollNo: student?.rollNo ?? "",
+    aadhaarNo: student?.aadhaarNo ?? "",
+    bloodGroup: student?.bloodGroup ?? "",
     firstName: student?.firstName ?? "",
     lastName: student?.lastName ?? "",
     email: student?.email ?? "",
@@ -47,6 +50,9 @@ export function StudentForm({
     guardianPhone: student?.guardianPhone ?? "",
     classId: student?.classId ?? "",
     status: student?.status ?? "active",
+    admissionAmount: "",
+    paymentMethod: "cash",
+    paymentReference: "",
   });
 
   const url = student ? `/api/school/students/${student.id}` : "/api/school/students";
@@ -60,7 +66,13 @@ export function StudentForm({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, organizationId, classId: form.classId || null }),
+        body: JSON.stringify({
+          ...form,
+          organizationId,
+          classId: form.classId || null,
+          admissionAmount:
+            form.admissionAmount === "" ? undefined : Number(form.admissionAmount),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -121,7 +133,31 @@ export function StudentForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-slate-700">Roll no</label>
-          <input value={form.rollNo} onChange={(e) => setForm((f) => ({ ...f, rollNo: e.target.value }))} className="input-field mt-1" />
+          <input
+            value={student?.rollNo ?? "Auto generated on save"}
+            readOnly
+            className="input-field mt-1 bg-slate-50 text-slate-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700">Aadhaar no *</label>
+          <input value={form.aadhaarNo} onChange={(e) => setForm((f) => ({ ...f, aadhaarNo: e.target.value }))} className="input-field mt-1" required />
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium text-slate-700">Blood group *</label>
+          <select value={form.bloodGroup} onChange={(e) => setForm((f) => ({ ...f, bloodGroup: e.target.value }))} className="input-field mt-1" required>
+            <option value="">—</option>
+            <option value="A+">A+</option>
+            <option value="A-">A-</option>
+            <option value="B+">B+</option>
+            <option value="B-">B-</option>
+            <option value="AB+">AB+</option>
+            <option value="AB-">AB-</option>
+            <option value="O+">O+</option>
+            <option value="O-">O-</option>
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Class</label>
@@ -146,7 +182,7 @@ export function StudentForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-slate-700">Date of birth</label>
-          <input type="date" value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} className="input-field mt-1" />
+          <input type="date" value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} className="input-field mt-1" required />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Gender</label>
@@ -172,6 +208,47 @@ export function StudentForm({
           <input type="tel" value={form.guardianPhone} onChange={(e) => setForm((f) => ({ ...f, guardianPhone: e.target.value }))} className="input-field mt-1" />
         </div>
       </div>
+      {!student && (
+        <div className="rounded-lg border border-slate-200 p-4">
+          <p className="font-medium text-slate-800">Admission payment</p>
+          <p className="mt-1 text-xs text-slate-500">Required: payment will appear in Payment Verification for approval.</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Admission amount</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.admissionAmount}
+                onChange={(e) => setForm((f) => ({ ...f, admissionAmount: e.target.value }))}
+                className="input-field mt-1"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Payment mode</label>
+              <select
+                value={form.paymentMethod}
+                onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}
+                className="input-field mt-1"
+                required
+              >
+                <option value="cash">Cash</option>
+                <option value="online">Online</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-slate-700">Reference</label>
+            <input
+              value={form.paymentReference}
+              onChange={(e) => setForm((f) => ({ ...f, paymentReference: e.target.value }))}
+              className="input-field mt-1"
+              placeholder="Txn ID / UTR / note"
+            />
+          </div>
+        </div>
+      )}
       {student && (
         <div>
           <label className="block text-sm font-medium text-slate-700">Status</label>
@@ -183,7 +260,12 @@ export function StudentForm({
         </div>
       )}
       <div className="flex gap-2 pt-2">
-        <button type="submit" disabled={loading} className="btn-primary">
+        <button
+          type="submit"
+          disabled={loading}
+          aria-busy={loading}
+          className={`btn-primary ${loading ? "btn-loading" : ""}`}
+        >
           {loading ? "Saving..." : student ? "Update" : "Create"}
         </button>
         <button type="button" onClick={() => router.back()} className="btn-secondary">

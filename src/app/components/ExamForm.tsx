@@ -17,7 +17,7 @@ export function ExamForm({
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [examType, setExamType] = useState("mid_term");
-  const [classId, setClassId] = useState("");
+  const [classId, setClassId] = useState(classes[0]?.id ?? "");
   const [academicYear, setAcademicYear] = useState("");
   const [subjects, setSubjects] = useState<{ name: string; maxMarks: string }[]>([
     { name: "", maxMarks: "100" },
@@ -34,20 +34,21 @@ export function ExamForm({
     e.preventDefault();
     setError("");
     const subj = subjects.filter((s) => s.name.trim());
-    if (!name.trim() || subj.length === 0) {
-      setError("Enter exam name and at least one subject.");
+    if (!name.trim() || subj.length === 0 || !classId) {
+      setError("Enter exam name, select class, and add at least one subject.");
       return;
     }
     setLoading(true);
     try {
       const res = await fetch("/api/school/exams", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           organizationId,
           name: name.trim(),
           examType,
-          classId: classId || null,
+          classId,
           academicYear: academicYear || null,
           subjects: subj.map((s) => ({ name: s.name, maxMarks: Number(s.maxMarks) || 100 })),
         }),
@@ -83,9 +84,8 @@ export function ExamForm({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700">Class (optional)</label>
-          <select value={classId} onChange={(e) => setClassId(e.target.value)} className="input-field mt-1">
-            <option value="">All</option>
+          <label className="block text-sm font-medium text-slate-700">Class *</label>
+          <select value={classId} onChange={(e) => setClassId(e.target.value)} className="input-field mt-1" required>
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
@@ -109,7 +109,14 @@ export function ExamForm({
           ))}
         </div>
       </div>
-      <button type="submit" disabled={loading} className="btn-primary">Create exam</button>
+      <button
+        type="submit"
+        disabled={loading}
+        aria-busy={loading}
+        className={`btn-primary ${loading ? "btn-loading" : ""}`}
+      >
+        {loading ? "Creating..." : "Create exam"}
+      </button>
     </form>
   );
 }
