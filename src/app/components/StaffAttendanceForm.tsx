@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 type StaffMember = { id: string; firstName: string; lastName: string; role: string };
 
@@ -107,6 +108,15 @@ export function StaffAttendanceForm({
     }
   }
 
+  const historyStaffItems = useMemo(
+    () =>
+      staff.map((s) => ({
+        value: s.id,
+        label: `${s.firstName} ${s.lastName} (${s.role})`,
+      })),
+    [staff],
+  );
+
   return (
     <form onSubmit={handleSubmit}>
       {error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -159,18 +169,14 @@ export function StaffAttendanceForm({
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div>
             <label className="block text-sm font-medium text-slate-700">Staff member</label>
-            <select
+            <SearchablePaginatedSelect
+              items={historyStaffItems}
               value={historyStaffId}
-              onChange={(e) => setHistoryStaffId(e.target.value)}
-              className="input-field mt-1"
-            >
-              <option value="">Select staff</option>
-              {staff.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.firstName} {s.lastName} ({s.role})
-                </option>
-              ))}
-            </select>
+              onChange={setHistoryStaffId}
+              emptyLabel="Select staff"
+              className="mt-1"
+              aria-label="Staff for report"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Month</label>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 
@@ -32,6 +33,11 @@ export function LibraryIssueManager({
   const [error, setError] = useState("");
   const [returningId, setReturningId] = useState<string | null>(null);
   const [confirmReturnIssueId, setConfirmReturnIssueId] = useState<string | null>(null);
+
+  const studentItems = useMemo(
+    () => students.map((s) => ({ value: s.id, label: `${s.name}${s.rollNo ? ` (${s.rollNo})` : ""}` })),
+    [students],
+  );
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -90,18 +96,15 @@ export function LibraryIssueManager({
         <form onSubmit={handleAssign} className="mt-4 grid gap-4 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700">Student</label>
-            <select
+            <SearchablePaginatedSelect
+              items={studentItems}
               value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
-              className="input-field mt-1"
+              onChange={setStudentId}
+              emptyLabel="Select student"
               required
-            >
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} {s.rollNo ? `(${s.rollNo})` : ""}
-                </option>
-              ))}
-            </select>
+              className="mt-1"
+              aria-label="Student"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Due date</label>

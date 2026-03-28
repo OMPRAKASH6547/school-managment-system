@@ -3,13 +3,19 @@ import { getSession } from "@/lib/auth";
 import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { firstZodIssueMessage, LIMITS, zCuidId, zIsoDateString } from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  date: z.string(),
-  entries: z.array(z.object({
-    studentId: z.string(),
-    status: z.enum(["present", "absent", "late", "leave"]),
-  })),
+  date: zIsoDateString,
+  entries: z
+    .array(
+      z.object({
+        studentId: zCuidId,
+        status: z.enum(["present", "absent", "late", "leave"]),
+      }),
+    )
+    .min(1)
+    .max(LIMITS.maxAttendanceEntries),
 });
 
 export async function POST(req: NextRequest) {
@@ -75,7 +81,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

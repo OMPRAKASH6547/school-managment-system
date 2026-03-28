@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { canPermission, type PermissionModule } from "@/lib/permissions";
@@ -200,6 +201,11 @@ export function SchoolLayout({
     router.refresh();
   }
 
+  const branchItems = useMemo(
+    () => branches.map((b) => ({ value: b.id, label: `${b.name} (${b.branchCode})` })),
+    [branches],
+  );
+
   const moduleByHref: Record<string, PermissionModule> = {
     "/school": "dashboard",
     "/school/students": "students",
@@ -266,19 +272,16 @@ export function SchoolLayout({
                     <span className="ml-2 text-slate-500">({branches[0].branchCode})</span>
                   </span>
                 ) : (
-                  <select
+                  <SearchablePaginatedSelect
+                    items={branchItems}
                     value={activeBranchId ?? ""}
-                    onChange={(e) => handleSelectBranch(e.target.value)}
+                    onChange={(id) => void handleSelectBranch(id)}
+                    required
                     disabled={branchLoading}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 max-w-[220px]"
+                    className="max-w-[220px]"
+                    emptyLabel="Select branch"
                     aria-label="Select branch"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.branchCode})
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
                 {(role === "school_admin" || role === "admin") && (
                   <Link
@@ -358,19 +361,17 @@ export function SchoolLayout({
                     {branches[0].name} ({branches[0].branchCode})
                   </div>
                 ) : (
-                  <select
+                  <SearchablePaginatedSelect
+                    variant="dark"
+                    items={branchItems}
                     value={activeBranchId ?? ""}
-                    onChange={(e) => handleSelectBranch(e.target.value)}
+                    onChange={(id) => void handleSelectBranch(id)}
+                    required
                     disabled={branchLoading}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-100"
+                    className="w-full"
+                    emptyLabel="Select branch"
                     aria-label="Select branch"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.branchCode})
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
               </div>
             )}

@@ -1,11 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SearchablePaginatedSelect, type SearchableSelectItem } from "@/app/components/SearchablePaginatedSelect";
 
 type FeePlan = { id: string; name: string; amount: number };
 type Student = { id: string; firstName: string; lastName: string; rollNo?: string | null };
 type Staff = { id: string; firstName: string; lastName: string; role: string; employeeId?: string | null };
+
+type FeeLine = {
+  key: string;
+  feePlanId: string;
+  customLabel: string;
+  amount: string;
+};
+
+function newLine(): FeeLine {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    feePlanId: "",
+    customLabel: "",
+    amount: "",
+  };
+}
 
 export function RecordPaymentForm({
   feePlans,
@@ -29,16 +46,94 @@ export function RecordPaymentForm({
     staffId: "",
     rollNo: "",
     employeeId: "",
-    amount: "",
     method: "cash",
     reference: "",
-    feePlanId: "",
     notes: "",
   });
+  const [lines, setLines] = useState<FeeLine[]>(() => [newLine()]);
+
+  const totalPreview = useMemo(() => {
+    let s = 0;
+    for (const line of lines) {
+      const n = Number(line.amount);
+      if (Number.isFinite(n) && n > 0) s += n;
+    }
+    return s;
+  }, [lines]);
+
+  const payerTypeItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "student", label: "Student" },
+      { value: "staff", label: "Teacher / Staff" },
+    ],
+    [],
+  );
+  const studentItems = useMemo(
+    () =>
+      students.map((s) => ({
+        value: s.id,
+        label: `${s.firstName} ${s.lastName}${s.rollNo ? ` (${s.rollNo})` : ""}`,
+      })),
+    [students],
+  );
+  const staffItems = useMemo(
+    () =>
+      staff.map((s) => ({
+        value: s.id,
+        label: `${s.firstName} ${s.lastName} (${s.role})${s.employeeId ? ` — ${s.employeeId}` : ""}`,
+      })),
+    [staff],
+  );
+  const methodItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "cash", label: "Cash" },
+      { value: "upi", label: "UPI" },
+      { value: "card", label: "Card" },
+      { value: "bank_transfer", label: "Bank transfer" },
+    ],
+    [],
+  );
+  const feeLineItems = useMemo(() => {
+    const rows: SearchableSelectItem[] = [
+      ...feePlans.map((p) => ({ value: p.id, label: `${p.name} (₹${p.amount})` })),
+      { value: "__custom__", label: "Custom fee…" },
+    ];
+    return rows;
+  }, [feePlans]);
+
+  function updateLine(key: string, patch: Partial<FeeLine>) {
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  function removeLine(key: string) {
+    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.key !== key)));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const lineItems: { label: string; amount: number; feePlanId: string | null }[] = [];
+    for (const line of lines) {
+      const amt = Number(line.amount);
+      if (!Number.isFinite(amt) || amt <= 0) continue;
+      if (line.feePlanId === "__custom__") {
+        const label = line.customLabel.trim() || "Fee";
+        lineItems.push({ label, amount: amt, feePlanId: null });
+      } else if (line.feePlanId) {
+        const p = feePlans.find((x) => x.id === line.feePlanId);
+        lineItems.push({
+          label: (p?.name ?? "Fee").trim(),
+          amount: amt,
+          feePlanId: line.feePlanId,
+        });
+      } else {
+        lineItems.push({ label: "Payment", amount: amt, feePlanId: null });
+      }
+    }
+    if (lineItems.length === 0) {
+      setError("Add at least one fee line with a positive amount.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/school/payments", {
@@ -49,10 +144,9 @@ export function RecordPaymentForm({
           payerType: form.payerType,
           studentId: form.payerType === "student" ? form.studentId : undefined,
           staffId: form.payerType === "staff" ? form.staffId : undefined,
-          amount: Number(form.amount),
+          lineItems,
           method: form.method,
           reference: form.reference || null,
-          feePlanId: form.feePlanId || null,
           notes: form.notes || null,
         }),
       });
@@ -67,12 +161,11 @@ export function RecordPaymentForm({
         staffId: "",
         rollNo: "",
         employeeId: "",
-        amount: "",
         method: "cash",
         reference: "",
-        feePlanId: "",
         notes: "",
       });
+      setLines([newLine()]);
       router.refresh();
     } catch {
       setError("Something went wrong");
@@ -86,24 +179,24 @@ export function RecordPaymentForm({
       {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       <div>
         <label className="block text-sm font-medium text-slate-700">Payment for *</label>
-        <select
+        <SearchablePaginatedSelect
+          items={payerTypeItems}
           value={form.payerType}
-          onChange={(e) =>
+          onChange={(v) =>
             setForm((f) => ({
               ...f,
-              payerType: e.target.value,
+              payerType: v as "student" | "staff",
               studentId: "",
               staffId: "",
               rollNo: "",
               employeeId: "",
             }))
           }
-          className="input-field mt-1"
+          emptyLabel="Payment for *"
           required
-        >
-          <option value="student">Student</option>
-          <option value="staff">Teacher / Staff</option>
-        </select>
+          className="mt-1"
+          aria-label="Payer type"
+        />
       </div>
       {form.payerType === "student" ? (
         <>
@@ -122,23 +215,18 @@ export function RecordPaymentForm({
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Student *</label>
-            <select
+            <SearchablePaginatedSelect
+              items={studentItems}
               value={form.studentId}
-              onChange={(e) => {
-                const sid = e.target.value;
+              onChange={(sid) => {
                 const selected = students.find((s) => s.id === sid);
                 setForm((f) => ({ ...f, studentId: sid, rollNo: selected?.rollNo ?? f.rollNo }));
               }}
-              className="input-field mt-1"
+              emptyLabel="Select"
               required
-            >
-              <option value="">Select</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.firstName} {s.lastName} {s.rollNo ? `(${s.rollNo})` : ""}
-                </option>
-              ))}
-            </select>
+              className="mt-1"
+              aria-label="Student"
+            />
           </div>
         </>
       ) : (
@@ -158,38 +246,32 @@ export function RecordPaymentForm({
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Teacher / Staff *</label>
-            <select
+            <SearchablePaginatedSelect
+              items={staffItems}
               value={form.staffId}
-              onChange={(e) => {
-                const sid = e.target.value;
+              onChange={(sid) => {
                 const selected = staff.find((s) => s.id === sid);
                 setForm((f) => ({ ...f, staffId: sid, employeeId: selected?.employeeId ?? f.employeeId }));
               }}
-              className="input-field mt-1"
+              emptyLabel="Select"
               required
-            >
-              <option value="">Select</option>
-              {staff.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.firstName} {s.lastName} ({s.role}) {s.employeeId ? `- ${s.employeeId}` : ""}
-                </option>
-              ))}
-            </select>
+              className="mt-1"
+              aria-label="Staff"
+            />
           </div>
         </>
       )}
       <div>
         <label className="block text-sm font-medium text-slate-700">Method *</label>
-        <select
+        <SearchablePaginatedSelect
+          items={methodItems}
           value={form.method}
-          onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))}
-          className="input-field mt-1"
-        >
-          <option value="cash">Cash</option>
-          <option value="upi">UPI</option>
-          <option value="card">Card</option>
-          <option value="bank_transfer">Bank transfer</option>
-        </select>
+          onChange={(v) => setForm((f) => ({ ...f, method: v }))}
+          emptyLabel="Method *"
+          required
+          className="mt-1"
+          aria-label="Payment method"
+        />
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700">Reference</label>
@@ -200,37 +282,91 @@ export function RecordPaymentForm({
           placeholder="Transaction ID"
         />
       </div>
-      {feePlans.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700">Fee plan</label>
-          <select
-            value={form.feePlanId}
-            onChange={(e) => {
-              const planId = e.target.value;
-              const selected = feePlans.find((p) => p.id === planId);
-              setForm((f) => ({ ...f, feePlanId: planId, amount: selected ? String(selected.amount) : f.amount }));
-            }}
-            className="input-field mt-1"
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-sm font-medium text-slate-800">Fee lines *</label>
+          <button
+            type="button"
+            onClick={() => setLines((prev) => [...prev, newLine()])}
+            className="text-sm font-medium text-primary-600 hover:underline"
           >
-            <option value="">—</option>
-            {feePlans.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} (₹{p.amount})</option>
-            ))}
-          </select>
+            + Add fee
+          </button>
         </div>
-      )}
-      <div>
-        <label className="block text-sm font-medium text-slate-700">Amount (₹) *</label>
-        <input
-          type="number"
-          min={0}
-          step={0.01}
-          value={form.amount}
-          onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-          className="input-field mt-1"
-          required
-        />
+        <p className="mt-1 text-xs text-slate-500">
+          Pick a fee plan or add a custom fee. Amounts are summed for the total payment. After verification, the PDF receipt lists each line.
+        </p>
+        <div className="mt-3 space-y-2">
+          {lines.map((line, idx) => (
+            <div
+              key={line.key}
+              className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-2 sm:flex-row sm:flex-wrap sm:items-end"
+            >
+              <div className="min-w-0 flex-1 sm:max-w-[220px]">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Fee type</span>
+                <SearchablePaginatedSelect
+                  items={feeLineItems}
+                  value={line.feePlanId === "__custom__" ? "__custom__" : line.feePlanId}
+                  onChange={(v) => {
+                    if (v === "__custom__") {
+                      updateLine(line.key, { feePlanId: "__custom__", customLabel: line.customLabel });
+                    } else if (v) {
+                      const p = feePlans.find((x) => x.id === v);
+                      updateLine(line.key, {
+                        feePlanId: v,
+                        customLabel: "",
+                        amount: p ? String(p.amount) : line.amount,
+                      });
+                    } else {
+                      updateLine(line.key, { feePlanId: "", customLabel: "", amount: "" });
+                    }
+                  }}
+                  emptyLabel="— Select fee plan —"
+                  className="mt-0.5 w-full"
+                  aria-label="Fee plan"
+                />
+              </div>
+              {line.feePlanId === "__custom__" && (
+                <div className="min-w-0 flex-1 sm:max-w-[180px]">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Name</span>
+                  <input
+                    value={line.customLabel}
+                    onChange={(e) => updateLine(line.key, { customLabel: e.target.value })}
+                    className="input-field mt-0.5 w-full"
+                    placeholder="e.g. Late fine, Sports"
+                  />
+                </div>
+              )}
+              <div className="w-full sm:w-32">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Amount (₹)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={line.amount}
+                  onChange={(e) => updateLine(line.key, { amount: e.target.value })}
+                  className="input-field mt-0.5 w-full"
+                  required={idx === 0}
+                />
+              </div>
+              {lines.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeLine(line.key)}
+                  className="text-sm text-red-600 hover:underline sm:mb-2"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-right text-sm font-semibold text-slate-900">
+          Total: ₹{totalPreview.toFixed(2)}
+        </p>
       </div>
+
       <div>
         <label className="block text-sm font-medium text-slate-700">Notes</label>
         <input

@@ -9,6 +9,7 @@ import { createFeeCardDocument } from "@/lib/pdf/FeeCard";
 import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
 import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 import { requirePermission } from "@/lib/permissions";
+import { parsePaymentLineItems } from "@/lib/payment-line-items";
 
 async function nodeStreamToUint8Array(stream: Readable): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
@@ -30,9 +31,10 @@ export async function POST(req: NextRequest) {
 
     const orgId = session.organizationId!;
     const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
+    const branchScope = { OR: [{ branchId }, { branchId: null }] as const };
 
     const payment = await prisma.payment.findFirst({
-      where: { id: body.paymentId, organizationId: orgId, branchId },
+      where: { id: body.paymentId, organizationId: orgId, ...branchScope },
       select: {
         id: true,
         payerType: true,
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
         verifiedAt: true,
         verifiedBy: true,
         verifiedByName: true,
+        lineItems: true,
         student: { select: { id: true, firstName: true, lastName: true, rollNo: true } },
         staff: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
         collectedBy: { select: { id: true, firstName: true, lastName: true } },
@@ -61,14 +64,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Payment not verified yet" }, { status: 403 });
     }
 
-    let acceptedByName: string | null = payment.verifiedByName ?? null;
-    if (!acceptedByName && payment.verifiedBy) {
+    let verifiedByName: string | null = payment.verifiedByName?.trim() || null;
+    if (!verifiedByName && payment.verifiedBy) {
       const user = await prisma.user.findFirst({
         where: { id: payment.verifiedBy },
         select: { name: true },
       });
-      acceptedByName = user?.name ?? null;
+      verifiedByName = user?.name?.trim() || null;
     }
+    if (!verifiedByName && payment.collectedBy) {
+      verifiedByName = `${payment.collectedBy.firstName} ${payment.collectedBy.lastName}`.trim() || null;
+    }
+
+    const issuedByName = session.name?.trim() || session.email || null;
 
     const baseUrl =
       process.env.NEXTAUTH_URL ??
@@ -90,6 +98,9 @@ export async function POST(req: NextRequest) {
     const logoDataUri = await loadImageDataUriForPdf(payment.organization.logo);
     const pdfTheme = pdfThemeFromAccent(payment.organization.pdfAccentColor);
 
+    const breakdown =
+      parsePaymentLineItems(payment.lineItems) ?? [{ label: "Payment", amount: payment.amount }];
+
     const doc = createFeeCardDocument({
       org: payment.organization,
       logoDataUri,
@@ -106,9 +117,11 @@ export async function POST(req: NextRequest) {
         reference: payment.reference ?? null,
         status: payment.status,
         verifiedAt: payment.verifiedAt,
+        lineItems: breakdown,
       },
       qrDataUrl,
-      acceptedByName: acceptedByName ?? (payment.collectedBy ? `${payment.collectedBy.firstName} ${payment.collectedBy.lastName}` : null),
+      verifiedByName,
+      issuedByName,
     });
 
     const pdfOutput = await pdf(doc).toBuffer();

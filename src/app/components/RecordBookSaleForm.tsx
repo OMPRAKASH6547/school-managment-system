@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 type Product = { id: string; name: string; price: number; stock: number };
 type BookSet = {
@@ -72,6 +73,8 @@ export function RecordBookSaleForm({
   const selectedSetTotal = selectedSet
     ? selectedSet.items.reduce((sum, it) => sum + (it.unitPrice ?? 0) * it.quantity, 0)
     : 0;
+
+  const paymentMethodItems = useMemo(() => PAYMENT_METHOD_OPTIONS.map((o) => ({ value: o.value, label: o.label })), []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedBookSetQuery(bookSetQuery.trim().toLowerCase()), 300);
@@ -291,18 +294,15 @@ export function RecordBookSaleForm({
 
       <div>
         <label className="block text-sm font-medium text-slate-700">Payment method *</label>
-        <select
+        <SearchablePaginatedSelect
+          items={paymentMethodItems}
           value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value)}
-          className="input-field mt-1"
+          onChange={setPaymentMethod}
+          emptyLabel="Payment method *"
           required
-        >
-          {PAYMENT_METHOD_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          className="mt-1"
+          aria-label="Payment method"
+        />
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">

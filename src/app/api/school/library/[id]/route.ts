@@ -3,13 +3,17 @@ import { z } from "zod";
 import { getSession, getSelectedBranchId, requireOrganization, resolveBranchIdForOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
+import { firstZodIssueMessage, LIMITS, zOptionalStr } from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  title: z.string().min(1),
-  author: z.string().optional(),
-  isbn: z.string().optional(),
-  category: z.string().optional(),
-  totalCopies: z.number().int().min(1),
+  title: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1).max(LIMITS.bookTitle),
+  ),
+  author: zOptionalStr(LIMITS.bookAuthor),
+  isbn: zOptionalStr(LIMITS.isbn),
+  category: zOptionalStr(LIMITS.libraryCategory),
+  totalCopies: z.number().int().min(1).max(50_000),
 });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    if (e instanceof z.ZodError) return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    if (e instanceof z.ZodError) return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

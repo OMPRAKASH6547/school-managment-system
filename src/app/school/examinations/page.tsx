@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { DeleteExamButton } from "@/app/components/DeleteExamButton";
 import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canPermission } from "@/lib/permissions";
 
 export default async function ExaminationsPage() {
   const session = await getSession();
@@ -15,6 +17,8 @@ export default async function ExaminationsPage() {
         })
       : null;
   const isTeacherUser = session?.role === "teacher" || !!staffTeacher;
+  const canDeleteExam =
+    !!session && canPermission(session.role, "examinations", "write", session.permissions ?? null);
 
   let exams;
   if (session?.role === "staff" && !staffTeacher) redirect("/school/staff-attendance");
@@ -87,10 +91,20 @@ export default async function ExaminationsPage() {
                       {exam.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link href={`/school/examinations/${exam.id}`} className="text-primary-600 hover:underline text-sm">Manage / Enter marks</Link>
+                  <td className="px-6 py-4 text-right text-sm">
+                    <Link href={`/school/examinations/${exam.id}`} className="text-primary-600 hover:underline">
+                      Manage / Enter marks
+                    </Link>
                     {" · "}
-                    <Link href={`/school/examinations/${exam.id}/results`} className="text-primary-600 hover:underline text-sm">Results</Link>
+                    <Link href={`/school/examinations/${exam.id}/results`} className="text-primary-600 hover:underline">
+                      Results
+                    </Link>
+                    {canDeleteExam ? (
+                      <>
+                        {" · "}
+                        <DeleteExamButton examId={exam.id} examName={exam.name} />
+                      </>
+                    ) : null}
                   </td>
                 </tr>
               ))}

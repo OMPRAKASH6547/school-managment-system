@@ -3,13 +3,16 @@ import { getSession, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
+import { firstZodIssueMessage, LIMITS, zOptionalStr, zPhoneOpt } from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  name: z.string().min(1),
-  address: z.string().optional().nullable(),
-  contact: z.string().optional().nullable(),
-  // Optional: allow manual branchCode. If not provided, we auto-generate.
-  branchCode: z.string().optional().nullable(),
+  name: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1, "Branch name required").max(LIMITS.orgName),
+  ),
+  address: zOptionalStr(LIMITS.longText),
+  contact: zPhoneOpt,
+  branchCode: zOptionalStr(LIMITS.branchCode),
 });
 
 function genCode(prefix: string): string {
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
     const body = bodySchema.parse(await req.json());
     const orgId = session.organizationId!;
 
-    let branchCode = (body.branchCode ?? undefined)?.trim() || undefined;
+    let branchCode = body.branchCode;
     if (!branchCode) {
       for (let attempt = 0; attempt < 10; attempt++) {
         const candidate = genCode("BR");
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

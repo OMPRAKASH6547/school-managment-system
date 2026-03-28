@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 const PRESETS = [
   { label: "Default blue", value: "#1e40af" },
@@ -32,6 +33,8 @@ export function SchoolAppearanceForm({
   const [theme, setTheme] = useState(dashboardTheme ?? "slate");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  const themeItems = useMemo(() => THEMES.map((t) => ({ value: t.id, label: t.label })), []);
 
   async function save() {
     setMessage("");
@@ -116,18 +119,16 @@ export function SchoolAppearanceForm({
           Dashboard sidebar theme
         </label>
         <p className="mt-1 text-xs text-slate-500">Changes the color of the school dashboard navigation.</p>
-        <select
+        <SearchablePaginatedSelect
           id="dash-theme"
+          items={themeItems}
           value={theme}
-          onChange={(e) => setTheme(e.target.value)}
-          className="input-field mt-2 max-w-xs"
-        >
-          {THEMES.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+          onChange={setTheme}
+          emptyLabel="Theme"
+          required
+          className="mt-2 max-w-xs"
+          aria-label="Dashboard sidebar theme"
+        />
       </div>
 
       <button type="button" onClick={save} disabled={loading} className="btn-primary">

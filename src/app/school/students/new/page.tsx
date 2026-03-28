@@ -18,7 +18,7 @@ export default async function NewStudentPage() {
         <Link href="/school/students" className="text-sm text-primary-600 hover:underline">← Students</Link>
       </div>
       <h1 className="text-2xl font-bold text-slate-900">Add student</h1>
-      <div className="mt-6 card max-w-xl">
+      <div className="mt-6 card max-w-3xl">
         <StudentForm organizationId={orgId} classes={classes} />
       </div>
     </>

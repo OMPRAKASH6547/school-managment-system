@@ -3,28 +3,40 @@ import { getSession, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
+import {
+  firstZodIssueMessage,
+  LIMITS,
+  zCuidId,
+  zEmail,
+  zOptionalStr,
+  zPersonName,
+  zPhoneOpt,
+} from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  branchId: z.string().min(1),
-  employeeId: z.string().optional(),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  email: z.string().email(),
-  phone: z.string().optional(),
-  role: z.string().min(1),
-  designation: z.string().optional(),
-  joinDate: z.string().nullable().optional(),
+  branchId: zCuidId,
+  employeeId: zOptionalStr(LIMITS.employeeId),
+  firstName: zPersonName,
+  lastName: zPersonName,
+  email: zEmail,
+  phone: zPhoneOpt,
+  role: z.preprocess(
+    (v) => (v === undefined || v === null ? "" : typeof v === "string" ? v.trim() : v),
+    z.string().min(1).max(LIMITS.roleKey),
+  ),
+  designation: zOptionalStr(LIMITS.designation),
+  joinDate: z.string().max(32).nullable().optional(),
   salary: z.number().nullable().optional(),
-  status: z.string().optional(),
-  classIds: z.array(z.string().min(1)).optional(),
-  classSubjects: z.record(z.string()).optional(),
+  status: zOptionalStr(LIMITS.statusKey),
+  classIds: z.array(zCuidId).max(200).optional(),
+  classSubjects: z.record(z.string().max(LIMITS.idString), z.string().max(LIMITS.mediumLine)).optional(),
   moduleAccess: z.record(
     z.object({
       view: z.boolean().optional(),
       add: z.boolean().optional(),
       edit: z.boolean().optional(),
       delete: z.boolean().optional(),
-    })
+    }),
   ).optional(),
 });
 
@@ -162,7 +174,7 @@ export async function POST(
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

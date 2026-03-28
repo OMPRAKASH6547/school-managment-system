@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { SearchablePaginatedSelect, type SearchableSelectItem } from "@/app/components/SearchablePaginatedSelect";
 import { useRouter } from "next/navigation";
 
 type Class = { id: string; name: string };
@@ -22,6 +23,16 @@ export function ExamForm({
   const [subjects, setSubjects] = useState<{ name: string; maxMarks: string }[]>([
     { name: "", maxMarks: "100" },
   ]);
+
+  const examTypeItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "unit_test", label: "Unit Test" },
+      { value: "mid_term", label: "Mid Term" },
+      { value: "final", label: "Final" },
+    ],
+    [],
+  );
+  const classItems = useMemo(() => classes.map((c) => ({ value: c.id, label: c.name })), [classes]);
 
   function addSubject() {
     setSubjects((s) => [...s, { name: "", maxMarks: "100" }]);
@@ -77,17 +88,26 @@ export function ExamForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-slate-700">Type</label>
-          <select value={examType} onChange={(e) => setExamType(e.target.value)} className="input-field mt-1">
-            <option value="unit_test">Unit Test</option>
-            <option value="mid_term">Mid Term</option>
-            <option value="final">Final</option>
-          </select>
+          <SearchablePaginatedSelect
+            items={examTypeItems}
+            value={examType}
+            onChange={setExamType}
+            emptyLabel="Type"
+            className="mt-1"
+            aria-label="Exam type"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Class *</label>
-          <select value={classId} onChange={(e) => setClassId(e.target.value)} className="input-field mt-1" required>
-            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <SearchablePaginatedSelect
+            items={classItems}
+            value={classId}
+            onChange={setClassId}
+            emptyLabel="Select class *"
+            required
+            className="mt-1"
+            aria-label="Class"
+          />
         </div>
       </div>
       <div>

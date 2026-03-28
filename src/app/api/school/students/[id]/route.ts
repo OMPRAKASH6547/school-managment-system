@@ -4,21 +4,44 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 import { randomBytes } from "crypto";
+import {
+  firstZodIssueMessage,
+  LIMITS,
+  zAadhaar,
+  zBloodGroup,
+  zCuidId,
+  zEmailOpt,
+  zIsoDateString,
+  zOptionalStr,
+  zPersonName,
+  zPhoneOpt,
+  zPinOpt,
+} from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  aadhaarNo: z.string().optional(),
-  bloodGroup: z.string().optional(),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  email: z.string().optional(),
-  phone: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  gender: z.string().optional(),
-  address: z.string().optional(),
-  guardianName: z.string().optional(),
-  guardianPhone: z.string().optional(),
-  classId: z.string().nullable().optional(),
-  status: z.string().optional(),
+  aadhaarNo: zAadhaar,
+  bloodGroup: zBloodGroup,
+  firstName: zPersonName,
+  lastName: zPersonName,
+  email: zEmailOpt,
+  phone: zPhoneOpt,
+  dateOfBirth: zIsoDateString,
+  gender: zOptionalStr(LIMITS.gender),
+  address: zOptionalStr(LIMITS.longText),
+  village: zOptionalStr(LIMITS.shortLabel),
+  policeStation: zOptionalStr(LIMITS.shortLabel),
+  postOffice: zOptionalStr(LIMITS.shortLabel),
+  district: zOptionalStr(LIMITS.shortLabel),
+  pinCode: zPinOpt,
+  state: zOptionalStr(LIMITS.shortLabel),
+  fatherName: zOptionalStr(LIMITS.personName),
+  motherName: zOptionalStr(LIMITS.personName),
+  motherPhone: zPhoneOpt,
+  category: zOptionalStr(LIMITS.category),
+  guardianName: zOptionalStr(LIMITS.personName),
+  guardianPhone: zPhoneOpt,
+  classId: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.union([z.null(), zCuidId])),
+  status: zOptionalStr(LIMITS.statusKey),
 });
 
 export async function POST(
@@ -87,16 +110,26 @@ export async function POST(
       where: { id },
       data: {
         rollNo,
-        aadhaarNo: data.aadhaarNo?.trim() || null,
-        bloodGroup: data.bloodGroup?.trim() || null,
+        aadhaarNo: data.aadhaarNo,
+        bloodGroup: data.bloodGroup,
         resultToken,
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email ?? null,
         phone: data.phone ?? null,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+        dateOfBirth: new Date(data.dateOfBirth),
         gender: data.gender ?? null,
         address: data.address ?? null,
+        village: data.village ?? null,
+        policeStation: data.policeStation ?? null,
+        postOffice: data.postOffice ?? null,
+        district: data.district ?? null,
+        pinCode: data.pinCode ?? null,
+        state: data.state ?? null,
+        fatherName: data.fatherName ?? null,
+        motherName: data.motherName ?? null,
+        motherPhone: data.motherPhone ?? null,
+        category: data.category ?? null,
         guardianName: data.guardianName ?? null,
         guardianPhone: data.guardianPhone ?? null,
         classId: data.classId ?? null,
@@ -106,7 +139,7 @@ export async function POST(
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

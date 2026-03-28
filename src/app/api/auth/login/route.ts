@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { applySessionCookie, createSessionToken, verifyPassword } from "@/lib/auth";
 import { z } from "zod";
+import { firstZodIssueMessage, zEmail, zPasswordLogin } from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: zEmail,
+  password: zPasswordLogin,
 });
 
 export async function POST(req: NextRequest) {
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     return res;
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     if (e instanceof Error) {
       return NextResponse.json({ error: e.message }, { status: 500 });

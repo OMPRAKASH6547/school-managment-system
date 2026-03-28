@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BOOK_PRODUCT_CATEGORY_ITEMS, SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 type ClassOpt = { id: string; name: string };
 
@@ -80,13 +81,15 @@ export function ClassBookSetForm({ classes }: { classes: ClassOpt[] }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-slate-700">Class *</label>
-          <select value={classId} onChange={(e) => setClassId(e.target.value)} className="input-field mt-1" required>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <SearchablePaginatedSelect
+            items={classItems}
+            value={classId}
+            onChange={setClassId}
+            emptyLabel="Class *"
+            required
+            className="mt-1"
+            aria-label="Class"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Set name (optional)</label>
@@ -125,11 +128,14 @@ export function ClassBookSetForm({ classes }: { classes: ClassOpt[] }) {
               className="input-field"
               placeholder="Stock"
             />
-            <select value={row.category} onChange={(e) => updateItem(idx, "category", e.target.value)} className="input-field">
-              <option value="book">Book</option>
-              <option value="copy">Copy</option>
-              <option value="stationery">Stationery</option>
-            </select>
+            <SearchablePaginatedSelect
+              items={BOOK_PRODUCT_CATEGORY_ITEMS}
+              value={row.category}
+              onChange={(v) => updateItem(idx, "category", v)}
+              emptyLabel="Category"
+              required
+              aria-label="Item category"
+            />
           </div>
         ))}
       </div>

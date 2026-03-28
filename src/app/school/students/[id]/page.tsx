@@ -29,7 +29,7 @@ export default async function EditStudentPage({
         <Link href="/school/students" className="text-sm text-primary-600 hover:underline">← Students</Link>
       </div>
       <h1 className="text-2xl font-bold text-slate-900">Edit student</h1>
-      <div className="mt-6 card max-w-xl">
+      <div className="mt-6 card max-w-3xl">
         <StudentForm organizationId={orgId} classes={classes} student={student} />
       </div>
     </>

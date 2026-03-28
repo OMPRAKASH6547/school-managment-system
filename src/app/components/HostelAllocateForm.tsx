@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 type Opt = { id: string; label: string };
 
@@ -10,6 +11,7 @@ export function HostelAllocateForm({ roomId, students }: { roomId: string; stude
   const [studentId, setStudentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const studentItems = useMemo(() => students.map((s) => ({ value: s.id, label: s.label })), [students]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,19 +47,15 @@ export function HostelAllocateForm({ roomId, students }: { roomId: string; stude
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div>
         <label className="block text-sm font-medium text-slate-700">Allocate student to this room</label>
-        <select
+        <SearchablePaginatedSelect
+          items={studentItems}
           value={studentId}
-          onChange={(e) => setStudentId(e.target.value)}
-          className="input-field mt-1"
+          onChange={setStudentId}
+          emptyLabel="Select student"
           required
-        >
-          <option value="">Select student</option>
-          {students.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
+          className="mt-1"
+          aria-label="Student"
+        />
       </div>
       <button type="submit" disabled={loading} className="btn-primary">
         {loading ? "Saving…" : "Allocate"}

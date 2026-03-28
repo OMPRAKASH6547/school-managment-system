@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SearchablePaginatedSelect, type SearchableSelectItem } from "@/app/components/SearchablePaginatedSelect";
 import { useRouter } from "next/navigation";
 
 type Staff = {
@@ -275,6 +276,27 @@ export function StaffForm({
     });
   }, [teacherClassIds, classes]);
 
+  const branchItems = useMemo(
+    () => branches.map((b) => ({ value: b.id, label: `${b.name} (${b.branchCode})` })),
+    [branches],
+  );
+  const roleItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "teacher", label: "Teacher" },
+      { value: "admin", label: "Admin" },
+      { value: "accountant", label: "Accountant" },
+      { value: "staff", label: "Staff" },
+    ],
+    [],
+  );
+  const staffStatusItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+    ],
+    [],
+  );
+
   const url = staff ? `/api/school/staff/${staff.id}` : "/api/school/staff";
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -337,29 +359,29 @@ export function StaffForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Branch *</label>
-          <select
+          <SearchablePaginatedSelect
+            items={branchItems}
             value={form.branchId}
-            onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))}
-            className="input-field mt-1"
+            onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+            emptyLabel="Branch *"
             required
-          >
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name} ({b.branchCode})
-              </option>
-            ))}
-          </select>
+            className="mt-1"
+            aria-label="Branch"
+          />
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-slate-700">Role *</label>
-          <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} className="input-field mt-1" required>
-            <option value="teacher">Teacher</option>
-            <option value="admin">Admin</option>
-            <option value="accountant">Accountant</option>
-            <option value="staff">Staff</option>
-          </select>
+          <SearchablePaginatedSelect
+            items={roleItems}
+            value={form.role}
+            onChange={(v) => setForm((f) => ({ ...f, role: v }))}
+            emptyLabel="Role *"
+            required
+            className="mt-1"
+            aria-label="Role"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Email *</label>
@@ -502,10 +524,15 @@ export function StaffForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Status</label>
-          <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="input-field mt-1">
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <SearchablePaginatedSelect
+            items={staffStatusItems}
+            value={form.status}
+            onChange={(v) => setForm((f) => ({ ...f, status: v }))}
+            emptyLabel="Status"
+            required
+            className="mt-1"
+            aria-label="Status"
+          />
         </div>
         </>
       )}

@@ -140,6 +140,16 @@ model Student {
   dateOfBirth    DateTime?
   gender         String?
   address        String?
+  village        String?
+  policeStation  String? // PS
+  postOffice     String? // Post
+  district       String?
+  pinCode        String?
+  state          String?
+  fatherName     String?
+  motherName     String?
+  motherPhone    String?
+  category       String? // general | obc | sc | st | ews | other (Indian school records)
   guardianName   String?
   guardianPhone  String?
   classId        String?
@@ -236,6 +246,8 @@ model Payment {
   verifiedByName String?
   collectedByStaffId String?
   feePlanId      String?
+  // Breakdown for receipts: [{ "label": "Tuition", "amount": 5000, "feePlanId": "..." | null }]
+  lineItems      Json?
   notes          String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -340,6 +352,7 @@ model TeacherClassSession {
 
   startedAt DateTime @default(now())
   endedAt   DateTime?
+  verifiedAt DateTime? // admin verified in dashboard
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

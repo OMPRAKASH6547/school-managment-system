@@ -2,16 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { z } from "zod";
+import {
+  firstZodIssueMessage,
+  LIMITS,
+  zEmail,
+  zOptionalStr,
+  zOrgName,
+  zPasswordRegister,
+  zPersonName,
+  zPhoneOpt,
+} from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  password: z.string().min(6),
-  orgName: z.string().min(1),
+  name: zPersonName,
+  email: zEmail,
+  password: zPasswordRegister,
+  orgName: zOrgName,
   orgType: z.enum(["school", "coaching"]),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
+  phone: zPhoneOpt,
+  address: zOptionalStr(LIMITS.longText),
+  city: zOptionalStr(80),
 });
 
 function slugify(s: string): string {
@@ -88,7 +98,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     if (e instanceof Error) {
       if (e.message.includes("replica set")) {

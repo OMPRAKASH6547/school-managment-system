@@ -4,17 +4,26 @@ import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganizatio
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
+import { firstZodIssueMessage, LIMITS, zCuidId, zOptionalStr, zPhoneOpt } from "@/lib/field-validation";
 
 const PAYMENT_METHODS = ["cash", "upi", "card", "bank_transfer", "cheque", "other"] as const;
 
 const bodySchema = z.object({
-  organizationId: z.string(),
-  studentId: z.string().nullable().optional(),
-  bookSetId: z.string().nullable().optional(),
-  customerName: z.string().nullable().optional(),
-  customerPhone: z.string().nullable().optional(),
+  organizationId: zCuidId,
+  studentId: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.union([z.null(), zCuidId])),
+  bookSetId: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.union([z.null(), zCuidId])),
+  customerName: zOptionalStr(LIMITS.personName),
+  customerPhone: zPhoneOpt,
   paymentMethod: z.enum(PAYMENT_METHODS),
-  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().min(1) })),
+  items: z
+    .array(
+      z.object({
+        productId: zCuidId,
+        quantity: z.number().int().min(1).max(10_000),
+      }),
+    )
+    .min(1)
+    .max(200),
 });
 
 export async function POST(req: NextRequest) {
@@ -116,7 +125,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    if (e instanceof z.ZodError) return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    if (e instanceof z.ZodError) return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

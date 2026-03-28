@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 type Student = {
   id: string;
@@ -75,6 +76,16 @@ export function AttendanceForm({
       cancelled = true;
     };
   }, [date, classFilter]);
+
+  const classItems = useMemo(() => classes.map((c) => ({ value: c.id, label: c.name })), [classes]);
+  const historyStudentItems = useMemo(
+    () =>
+      students.map((s) => ({
+        value: s.id,
+        label: `${s.firstName} ${s.lastName} (${s.class?.name ?? "No class"})`,
+      })),
+    [students],
+  );
 
   const filtered = classFilter ? students.filter((s) => s.classId === classFilter) : [];
 
@@ -161,17 +172,15 @@ export function AttendanceForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Class</label>
-          <select
+          <SearchablePaginatedSelect
+            items={classItems}
             value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-            className="input-field mt-1"
+            onChange={setClassFilter}
+            emptyLabel="Select class"
             required
-          >
-            <option value="">Select class</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            className="mt-1"
+            aria-label="Class"
+          />
         </div>
       </div>
       <div className="mt-6 overflow-x-auto">
@@ -224,18 +233,14 @@ export function AttendanceForm({
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div>
             <label className="block text-sm font-medium text-slate-700">Student</label>
-            <select
+            <SearchablePaginatedSelect
+              items={historyStudentItems}
               value={historyStudentId}
-              onChange={(e) => setHistoryStudentId(e.target.value)}
-              className="input-field mt-1"
-            >
-              <option value="">Select student</option>
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.firstName} {s.lastName} ({s.class?.name ?? "No class"})
-                </option>
-              ))}
-            </select>
+              onChange={setHistoryStudentId}
+              emptyLabel="Select student"
+              className="mt-1"
+              aria-label="Student for report"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Month</label>

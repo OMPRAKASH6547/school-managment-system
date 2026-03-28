@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { VerifyPaymentButton } from "@/app/components/VerifyPaymentButton";
 import { RejectPaymentButton } from "@/app/components/RejectPaymentButton";
+import { PaymentVerificationFilterForm } from "@/app/components/PaymentVerificationFilterForm";
 
 const PAGE_SIZE = 20;
 
@@ -97,22 +98,7 @@ export default async function PaymentVerificationPage({
       <p className="mt-1 text-slate-600">Admin can verify or reject submitted student/staff payments from one place.</p>
 
       <div className="mt-6 card overflow-hidden p-0">
-        <form className="grid gap-3 border-b border-slate-200 px-6 py-4 sm:grid-cols-5">
-          <input name="q" defaultValue={q} placeholder="Name / roll no / employee id" className="input-field" />
-          <select name="payerType" defaultValue={payerType} className="input-field">
-            <option value="">All payer types</option>
-            <option value="student">Student</option>
-            <option value="staff">Teacher / Staff</option>
-          </select>
-          <select name="status" defaultValue={status} className="input-field">
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="verified">Verified</option>
-            <option value="rejected">Rejected</option>
-          </select>
-          <button className="btn-primary" type="submit">Filter</button>
-          <a className="btn-secondary" href="/school/payment-verification">Reset</a>
-        </form>
+        <PaymentVerificationFilterForm q={q} payerType={payerType} status={status} />
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm whitespace-nowrap">

@@ -154,6 +154,7 @@ export default async function PublicResultPage({
                 lastName: student.lastName,
                 rollNo: student.rollNo ?? null,
                 address: student.address ?? null,
+                fatherName: student.fatherName ?? null,
                 guardianName: student.guardianName ?? null,
                 image: student.image ?? null,
                 dateOfBirth: student.dateOfBirth ?? null,
@@ -290,7 +291,7 @@ export default async function PublicResultPage({
                   : null
               }
               studentAddress={result.student.address}
-              fatherName={result.student.guardianName}
+              fatherName={result.student.fatherName ?? result.student.guardianName}
               motherName={null}
               admissionNo={null}
               house={null}

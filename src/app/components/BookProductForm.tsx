@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { BOOK_PRODUCT_CATEGORY_ITEMS, SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 export function BookProductForm() {
   const router = useRouter();
@@ -190,11 +191,15 @@ export function BookProductForm() {
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Category</label>
-          <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="input-field mt-1">
-            <option value="book">Book</option>
-            <option value="copy">Copy</option>
-            <option value="stationery">Stationery</option>
-          </select>
+          <SearchablePaginatedSelect
+            items={BOOK_PRODUCT_CATEGORY_ITEMS}
+            value={form.category}
+            onChange={(v) => setForm((f) => ({ ...f, category: v }))}
+            emptyLabel="Category"
+            required
+            className="mt-1"
+            aria-label="Category"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">SKU</label>
@@ -277,15 +282,15 @@ export function BookProductForm() {
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Category</label>
-          <select
+          <SearchablePaginatedSelect
+            items={BOOK_PRODUCT_CATEGORY_ITEMS}
             value={scanForm.category}
-            onChange={(e) => setScanForm((f) => ({ ...f, category: e.target.value }))}
-            className="input-field mt-1"
-          >
-            <option value="book">Book</option>
-            <option value="copy">Copy</option>
-            <option value="stationery">Stationery</option>
-          </select>
+            onChange={(v) => setScanForm((f) => ({ ...f, category: v }))}
+            emptyLabel="Category"
+            required
+            className="mt-1"
+            aria-label="Scan category"
+          />
         </div>
         <button type="submit" disabled={scanLoading} className="btn-primary">
           {scanLoading ? "Processing..." : "Add/Update by scan"}

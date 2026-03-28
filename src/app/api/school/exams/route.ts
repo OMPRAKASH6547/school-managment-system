@@ -3,14 +3,37 @@ import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requir
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
+import {
+  firstZodIssueMessage,
+  LIMITS,
+  zCuidId,
+  zOptionalStr,
+} from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  organizationId: z.string(),
-  name: z.string().min(1),
-  examType: z.string(),
-  classId: z.string().min(1),
-  academicYear: z.string().optional(),
-  subjects: z.array(z.object({ name: z.string().min(1), maxMarks: z.number() })),
+  organizationId: zCuidId,
+  name: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1).max(LIMITS.examName),
+  ),
+  examType: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1).max(LIMITS.examType),
+  ),
+  classId: zCuidId,
+  academicYear: zOptionalStr(LIMITS.academicYear),
+  subjects: z
+    .array(
+      z.object({
+        name: z.preprocess(
+          (v) => (typeof v === "string" ? v.trim() : v),
+          z.string().min(1).max(LIMITS.subjectName),
+        ),
+        maxMarks: z.number().min(0).max(100_000),
+      }),
+    )
+    .min(1)
+    .max(LIMITS.maxSubjectsPerExam),
 });
 
 export async function POST(req: NextRequest) {
@@ -62,7 +85,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, id: exam.id });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

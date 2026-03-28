@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { SearchablePaginatedSelect, type SearchableSelectItem } from "@/app/components/SearchablePaginatedSelect";
 import { useRouter } from "next/navigation";
 
 type Class = { id: string; name: string };
@@ -25,6 +26,24 @@ export function CreateFeePlanForm({
     classId: "",
     dueDay: "",
   });
+
+  const payerItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "student", label: "Student" },
+      { value: "staff", label: "Teacher / Staff" },
+    ],
+    [],
+  );
+  const frequencyItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "one_time", label: "One time" },
+      { value: "monthly", label: "Monthly" },
+      { value: "quarterly", label: "Quarterly" },
+      { value: "yearly", label: "Yearly" },
+    ],
+    [],
+  );
+  const classItems = useMemo(() => classes.map((c) => ({ value: c.id, label: c.name })), [classes]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,33 +114,33 @@ export function CreateFeePlanForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="block text-xs font-medium text-slate-600">Plan for</label>
-          <select
+          <SearchablePaginatedSelect
+            items={payerItems}
             value={form.payerType}
-            onChange={(e) =>
+            onChange={(v) =>
               setForm((f) => ({
                 ...f,
-                payerType: e.target.value as "student" | "staff",
-                classId: e.target.value === "staff" ? "" : f.classId,
+                payerType: v as "student" | "staff",
+                classId: v === "staff" ? "" : f.classId,
               }))
             }
-            className="input-field mt-1 text-sm"
-          >
-            <option value="student">Student</option>
-            <option value="staff">Teacher / Staff</option>
-          </select>
+            emptyLabel="Plan for"
+            required
+            className="mt-1"
+            aria-label="Payer type"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600">Frequency</label>
-          <select
+          <SearchablePaginatedSelect
+            items={frequencyItems}
             value={form.frequency}
-            onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value as typeof form.frequency }))}
-            className="input-field mt-1 text-sm"
-          >
-            <option value="one_time">One time</option>
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="yearly">Yearly</option>
-          </select>
+            onChange={(v) => setForm((f) => ({ ...f, frequency: v as typeof form.frequency }))}
+            emptyLabel="Frequency"
+            required
+            className="mt-1"
+            aria-label="Frequency"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600">Due day (1–31)</label>
@@ -139,16 +158,14 @@ export function CreateFeePlanForm({
       {form.payerType === "student" && (
         <div>
           <label className="block text-xs font-medium text-slate-600">Class (optional)</label>
-          <select
+          <SearchablePaginatedSelect
+            items={classItems}
             value={form.classId}
-            onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
-            className="input-field mt-1 text-sm"
-          >
-            <option value="">All classes</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            onChange={(v) => setForm((f) => ({ ...f, classId: v }))}
+            emptyLabel="All classes"
+            className="mt-1"
+            aria-label="Class"
+          />
         </div>
       )}
       <button type="submit" disabled={loading} className="btn-primary text-sm">

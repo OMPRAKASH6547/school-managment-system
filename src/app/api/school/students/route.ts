@@ -5,25 +5,50 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 import { randomBytes } from "crypto";
 import { sendNotificationEmail } from "@/lib/notifications";
+import {
+  firstZodIssueMessage,
+  LIMITS,
+  zAdmissionLineItems,
+  zAadhaar,
+  zBloodGroup,
+  zCuidId,
+  zEmailOpt,
+  zIsoDateString,
+  zOptionalStr,
+  zPaymentMethodAdmission,
+  zPersonName,
+  zPhoneOpt,
+  zPinOpt,
+} from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  organizationId: z.string(),
-  aadhaarNo: z.string().optional(),
-  bloodGroup: z.string().optional(),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  email: z.string().optional(),
-  phone: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  gender: z.string().optional(),
-  address: z.string().optional(),
-  guardianName: z.string().optional(),
-  guardianPhone: z.string().optional(),
-  classId: z.string().nullable().optional(),
-  status: z.string().optional(),
-  admissionAmount: z.number().positive(),
-  paymentMethod: z.enum(["cash", "online"]),
-  paymentReference: z.string().optional(),
+  organizationId: zCuidId,
+  aadhaarNo: zAadhaar,
+  bloodGroup: zBloodGroup,
+  firstName: zPersonName,
+  lastName: zPersonName,
+  email: zEmailOpt,
+  phone: zPhoneOpt,
+  dateOfBirth: zIsoDateString,
+  gender: zOptionalStr(LIMITS.gender),
+  address: zOptionalStr(LIMITS.longText),
+  village: zOptionalStr(LIMITS.shortLabel),
+  policeStation: zOptionalStr(LIMITS.shortLabel),
+  postOffice: zOptionalStr(LIMITS.shortLabel),
+  district: zOptionalStr(LIMITS.shortLabel),
+  pinCode: zPinOpt,
+  state: zOptionalStr(LIMITS.shortLabel),
+  fatherName: zOptionalStr(LIMITS.personName),
+  motherName: zOptionalStr(LIMITS.personName),
+  motherPhone: zPhoneOpt,
+  category: zOptionalStr(LIMITS.category),
+  guardianName: zOptionalStr(LIMITS.personName),
+  guardianPhone: zPhoneOpt,
+  classId: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.union([z.null(), zCuidId])),
+  status: zOptionalStr(LIMITS.statusKey),
+  admissionLineItems: zAdmissionLineItems,
+  paymentMethod: zPaymentMethodAdmission,
+  paymentReference: zOptionalStr(LIMITS.reference),
 });
 
 export async function POST(req: NextRequest) {
@@ -82,18 +107,8 @@ export async function POST(req: NextRequest) {
       return `${nowYY}${dobYY}${String(Date.now()).slice(-4)}`;
     }
 
-    const aadhaarNo = data.aadhaarNo?.trim() || null;
-    const bloodGroup = data.bloodGroup?.trim() || null;
-
-    if (!data.dateOfBirth) {
-      return NextResponse.json({ error: "Date of birth is required" }, { status: 400 });
-    }
-    if (!aadhaarNo) {
-      return NextResponse.json({ error: "Aadhaar number is required" }, { status: 400 });
-    }
-    if (!bloodGroup) {
-      return NextResponse.json({ error: "Blood group is required" }, { status: 400 });
-    }
+    const aadhaarNo = data.aadhaarNo;
+    const bloodGroup = data.bloodGroup;
 
     const rollNo = await generateUniqueRollNo({
       organizationId: session.organizationId!,
@@ -118,16 +133,26 @@ export async function POST(req: NextRequest) {
           resultToken,
           firstName: data.firstName,
           lastName: data.lastName,
-          email: data.email || null,
-          phone: data.phone || null,
-          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
-          gender: data.gender || null,
-          address: data.address || null,
-          guardianName: data.guardianName || null,
-          guardianPhone: data.guardianPhone || null,
+          email: data.email ?? null,
+          phone: data.phone ?? null,
+          dateOfBirth: new Date(data.dateOfBirth),
+          gender: data.gender ?? null,
+          address: data.address ?? null,
+          village: data.village ?? null,
+          policeStation: data.policeStation ?? null,
+          postOffice: data.postOffice ?? null,
+          district: data.district ?? null,
+          pinCode: data.pinCode ?? null,
+          state: data.state ?? null,
+          fatherName: data.fatherName ?? null,
+          motherName: data.motherName ?? null,
+          motherPhone: data.motherPhone ?? null,
+          category: data.category ?? null,
+          guardianName: data.guardianName ?? null,
+          guardianPhone: data.guardianPhone ?? null,
           createdBy: session.id,
-          classId: data.classId || null,
-          status: data.status || "active",
+          classId: data.classId ?? null,
+          status: data.status ?? "active",
         } as any,
       });
     } catch (error) {
@@ -145,22 +170,37 @@ export async function POST(req: NextRequest) {
           resultToken,
           firstName: data.firstName,
           lastName: data.lastName,
-          email: data.email || null,
-          phone: data.phone || null,
-          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
-          gender: data.gender || null,
-          address: data.address || null,
-          guardianName: data.guardianName || null,
-          guardianPhone: data.guardianPhone || null,
+          email: data.email ?? null,
+          phone: data.phone ?? null,
+          dateOfBirth: new Date(data.dateOfBirth),
+          gender: data.gender ?? null,
+          address: data.address ?? null,
+          village: data.village ?? null,
+          policeStation: data.policeStation ?? null,
+          postOffice: data.postOffice ?? null,
+          district: data.district ?? null,
+          pinCode: data.pinCode ?? null,
+          state: data.state ?? null,
+          fatherName: data.fatherName ?? null,
+          motherName: data.motherName ?? null,
+          motherPhone: data.motherPhone ?? null,
+          category: data.category ?? null,
+          guardianName: data.guardianName ?? null,
+          guardianPhone: data.guardianPhone ?? null,
           createdBy: session.id,
           class: data.classId ? { connect: { id: data.classId } } : undefined,
-          status: data.status || "active",
+          status: data.status ?? "active",
         } as any,
       });
     }
 
     let admissionPaymentId: string | null = null;
-    const admissionAmount = Number(data.admissionAmount);
+    const lineItemsJson = data.admissionLineItems.map((row) => ({
+      label: row.label,
+      amount: row.amount,
+      feePlanId: null as string | null,
+    }));
+    const admissionAmount = lineItemsJson.reduce((s, row) => s + row.amount, 0);
     const method = data.paymentMethod;
     const payment = await prisma.payment.create({
       data: {
@@ -169,9 +209,13 @@ export async function POST(req: NextRequest) {
         studentId: createdStudent.id,
         amount: admissionAmount,
         method,
-        reference: data.paymentReference?.trim() || null,
+        reference: data.paymentReference ?? null,
         feePlanId: null,
-        notes: "Admission fee",
+        lineItems: lineItemsJson,
+        notes:
+          lineItemsJson.length > 1
+            ? `Admission (${lineItemsJson.length} items)`
+            : lineItemsJson[0]?.label ?? "Admission fee",
         // Admission payment must be verified later from payment verification flow.
         status: "pending",
         verifiedAt: null,
@@ -201,13 +245,14 @@ export async function POST(req: NextRequest) {
         <p><strong>Blood Group:</strong> ${bloodGroup}</p>
         <p><strong>Created By:</strong> ${creator?.name ?? "-"}</p>
         <p><strong>Admission Fee:</strong> ${admissionAmount > 0 ? `INR ${admissionAmount}` : "Not recorded"}</p>
+        <p><strong>Breakdown:</strong> ${lineItemsJson.map((r) => `${r.label}: INR ${r.amount}`).join("; ")}</p>
       `,
     });
 
     return NextResponse.json({ ok: true, studentId: createdStudent.id, admissionPaymentId });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+      return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     }
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

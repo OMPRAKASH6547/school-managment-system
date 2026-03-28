@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BOOK_PRODUCT_CATEGORY_ITEMS, SearchablePaginatedSelect, type SearchableSelectItem } from "@/app/components/SearchablePaginatedSelect";
 
 export function BookProductEditForm({
   product,
@@ -71,18 +72,27 @@ export function BookProductEditForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-slate-700">Category</label>
-          <select className="input-field mt-1" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
-            <option value="book">Book</option>
-            <option value="copy">Copy</option>
-            <option value="stationery">Stationery</option>
-          </select>
+          <SearchablePaginatedSelect
+            items={BOOK_PRODUCT_CATEGORY_ITEMS}
+            value={form.category}
+            onChange={(v) => setForm((f) => ({ ...f, category: v }))}
+            emptyLabel="Category"
+            required
+            className="mt-1"
+            aria-label="Category"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Status</label>
-          <select className="input-field mt-1" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <SearchablePaginatedSelect
+            items={productStatusItems}
+            value={form.status}
+            onChange={(v) => setForm((f) => ({ ...f, status: v }))}
+            emptyLabel="Status"
+            required
+            className="mt-1"
+            aria-label="Status"
+          />
         </div>
       </div>
       <div>

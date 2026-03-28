@@ -206,7 +206,7 @@ export default async function PublicResultPage({
         className={student.class?.name ?? null}
         studentDob={studentDobDisplay}
         studentAddress={student.address ?? null}
-        fatherName={student.guardianName ?? null}
+        fatherName={student.fatherName ?? student.guardianName ?? null}
         motherName={null}
         admissionNo={null}
         house={null}
@@ -229,7 +229,7 @@ export default async function PublicResultPage({
             className={student.class?.name ?? null}
             studentDob={studentDobDisplay}
             studentAddress={student.address ?? null}
-            fatherName={student.guardianName ?? null}
+            fatherName={student.fatherName ?? student.guardianName ?? null}
             motherName={null}
             admissionNo={null}
             house={null}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SearchablePaginatedSelect, type SearchableSelectItem } from "@/app/components/SearchablePaginatedSelect";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -17,6 +18,14 @@ export function RegisterForm() {
     address: "",
     city: "",
   });
+
+  const orgTypeItems = useMemo<SearchableSelectItem[]>(
+    () => [
+      { value: "school", label: "School" },
+      { value: "coaching", label: "Coaching" },
+    ],
+    [],
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,14 +104,15 @@ export function RegisterForm() {
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700">Type</label>
-        <select
+        <SearchablePaginatedSelect
+          items={orgTypeItems}
           value={form.orgType}
-          onChange={(e) => setForm((f) => ({ ...f, orgType: e.target.value }))}
-          className="input-field mt-1"
-        >
-          <option value="school">School</option>
-          <option value="coaching">Coaching</option>
-        </select>
+          onChange={(v) => setForm((f) => ({ ...f, orgType: v }))}
+          emptyLabel="Institution type"
+          required
+          className="mt-1"
+          aria-label="Institution type"
+        />
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700">Phone</label>

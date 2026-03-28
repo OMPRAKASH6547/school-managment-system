@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 
 type Plan = { id: string; name: string; slug: string; price: number };
 
@@ -18,6 +19,10 @@ export function AssignPlanForm({
   const [planId, setPlanId] = useState(currentPlanId ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const planItems = useMemo(
+    () => plans.map((p) => ({ value: p.id, label: `${p.name} — ₹${p.price}/mo` })),
+    [plans],
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,19 +49,14 @@ export function AssignPlanForm({
   return (
     <form onSubmit={handleSubmit}>
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-      <select
+      <SearchablePaginatedSelect
+        items={planItems}
         value={planId}
-        onChange={(e) => setPlanId(e.target.value)}
-        className="input-field"
+        onChange={setPlanId}
+        emptyLabel="Select plan"
         required
-      >
-        <option value="">Select plan</option>
-        {plans.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name} — ₹{p.price}/mo
-          </option>
-        ))}
-      </select>
+        aria-label="Subscription plan"
+      />
       <button type="submit" disabled={loading || !planId} className="btn-primary mt-3">
         {loading ? "Saving..." : "Assign plan"}
       </button>

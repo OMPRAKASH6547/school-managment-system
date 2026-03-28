@@ -3,14 +3,18 @@ import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requir
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
+import { firstZodIssueMessage, LIMITS, zCuidId, zOptionalStr, zPhoneOpt } from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  routeId: z.string().nullable().optional(),
-  label: z.string().min(1),
-  registrationNo: z.string().nullable().optional(),
-  capacity: z.number().int().min(1).optional(),
-  driverName: z.string().nullable().optional(),
-  driverPhone: z.string().nullable().optional(),
+  routeId: z.preprocess((v) => (v === "" || v === undefined ? null : v), z.union([z.null(), zCuidId])),
+  label: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1).max(LIMITS.shortLabel),
+  ),
+  registrationNo: zOptionalStr(40),
+  capacity: z.number().int().min(1).max(500).optional(),
+  driverName: zOptionalStr(LIMITS.personName),
+  driverPhone: zPhoneOpt,
 });
 
 export async function GET() {
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    if (e instanceof z.ZodError) return NextResponse.json({ error: e.errors[0]?.message }, { status: 400 });
+    if (e instanceof z.ZodError) return NextResponse.json({ error: firstZodIssueMessage(e) }, { status: 400 });
     if (e instanceof Error && e.message.includes("Unauthorized")) {
       return NextResponse.json({ error: e.message }, { status: 403 });
     }
