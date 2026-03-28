@@ -1,14 +1,20 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
+import type { PdfThemeColors } from "@/lib/pdf/pdfTheme";
+import { DEFAULT_PDF_THEME } from "@/lib/pdf/pdfTheme";
 
 export function createAdmissionReceiptDocument({
   org,
+  logoDataUri,
+  pdfTheme,
   student,
   payment,
   qrDataUrl,
   createdByName,
 }: {
   org: { name: string; logo: string | null; address: string | null; phone: string | null; email: string | null };
+  logoDataUri?: string | null;
+  pdfTheme?: PdfThemeColors | null;
   student: {
     firstName: string;
     lastName: string;
@@ -27,18 +33,26 @@ export function createAdmissionReceiptDocument({
   qrDataUrl: string;
   createdByName: string | null;
 }) {
+  const theme = pdfTheme ?? DEFAULT_PDF_THEME;
   const styles = StyleSheet.create({
     page: { padding: 28, fontSize: 10, fontFamily: "Helvetica", color: "#0f172a" },
     header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 18 },
     brand: { flexDirection: "row", gap: 10, alignItems: "center" },
-    logo: { width: 52, height: 52, borderRadius: 8, border: "1px solid #cbd5e1", objectFit: "cover" },
+    logo: {
+      width: 52,
+      height: 52,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.border,
+      objectFit: "contain",
+    },
     schoolName: { fontSize: 16, fontWeight: "bold" },
-    receiptTitle: { fontSize: 14, fontWeight: "bold", textAlign: "right" },
+    receiptTitle: { fontSize: 14, fontWeight: "bold", textAlign: "right", color: theme.primary },
     muted: { color: "#64748b" },
     block: { marginBottom: 10 },
-    table: { borderWidth: 1, borderColor: "#e2e8f0" },
-    row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
-    cell: { flex: 1, padding: 8, borderRightWidth: 1, borderRightColor: "#e2e8f0" },
+    table: { borderWidth: 1, borderColor: theme.border },
+    row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: theme.border },
+    cell: { flex: 1, padding: 8, borderRightWidth: 1, borderRightColor: theme.border },
     cellLast: { flex: 1, padding: 8 },
     key: { color: "#475569", marginBottom: 2 },
     val: { fontWeight: "bold" },
@@ -46,15 +60,12 @@ export function createAdmissionReceiptDocument({
     qr: { width: 92, height: 92 },
   });
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const logoSrc = org.logo ? `${baseUrl.replace(/\/$/, "")}/${org.logo}` : null;
-
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.brand}>
-            {logoSrc ? <Image src={logoSrc} style={styles.logo} /> : null}
+            {logoDataUri ? <Image src={logoDataUri} style={styles.logo} /> : null}
             <View>
               <Text style={styles.schoolName}>{org.name}</Text>
               <Text style={styles.muted}>{org.address ?? "-"}</Text>

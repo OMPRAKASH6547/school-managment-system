@@ -7,12 +7,16 @@ import {
     Image,
     StyleSheet,
 } from "@react-pdf/renderer";
+import type { PdfThemeColors } from "@/lib/pdf/pdfTheme";
+import { DEFAULT_PDF_THEME } from "@/lib/pdf/pdfTheme";
 
 export const createInvoiceDocument = (
     sale: any,
     org: any,
-    qrImage: string
+    qrImage: string,
+    opts?: { logoDataUri?: string | null; pdfTheme?: PdfThemeColors | null }
 ) => {
+    const theme = opts?.pdfTheme ?? DEFAULT_PDF_THEME;
     const styles = StyleSheet.create({
         page: {
             padding: 30,
@@ -37,12 +41,11 @@ export const createInvoiceDocument = (
             height: 60,
             marginRight: 10,
             borderRadius: 10,
-            objectFit: "cover",
-            border: "1px solid #000",
+            objectFit: "contain",
+            borderWidth: 1,
+            borderColor: theme.border,
             padding: 5,
             backgroundColor: "#fff",
-            boxShadow: "0 0 10px 0 rgba(0, 0, 0, 0.1)",
-
         },
 
         schoolName: {
@@ -52,6 +55,7 @@ export const createInvoiceDocument = (
 
         invoiceBox: {
             borderWidth: 1,
+            borderColor: theme.border,
             padding: 10,
             width: 200,
         },
@@ -61,6 +65,7 @@ export const createInvoiceDocument = (
             fontWeight: "bold",
             marginBottom: 5,
             textAlign: "center",
+            color: theme.primary,
         },
 
         section: {
@@ -74,13 +79,15 @@ export const createInvoiceDocument = (
         // TABLE
         table: {
             borderWidth: 1,
+            borderColor: theme.border,
             marginTop: 10,
         },
 
         tableHeader: {
             flexDirection: "row",
             borderBottomWidth: 1,
-            backgroundColor: "#f2f2f2",
+            borderBottomColor: theme.border,
+            backgroundColor: theme.light,
             paddingVertical: 6,
             paddingHorizontal: 4,
         },
@@ -88,6 +95,7 @@ export const createInvoiceDocument = (
         tableRow: {
             flexDirection: "row",
             borderBottomWidth: 0.5,
+            borderBottomColor: theme.border,
             paddingVertical: 5,
             paddingHorizontal: 4,
         },
@@ -138,6 +146,18 @@ export const createInvoiceDocument = (
     const gst = 0; // Add calculation if needed
     const grandTotal = subtotal + gst;
 
+    const paymentLabels: Record<string, string> = {
+      cash: "Cash",
+      upi: "UPI",
+      card: "Card",
+      bank_transfer: "Bank transfer",
+      cheque: "Cheque",
+      other: "Other",
+    };
+    const paymentMethodLabel = sale.paymentMethod
+      ? paymentLabels[String(sale.paymentMethod)] ?? String(sale.paymentMethod)
+      : null;
+
     const rawItems = Array.isArray(sale.items) ? sale.items : [];
     const hasOnlySyntheticSetItems =
         !!sale.bookSet &&
@@ -168,7 +188,7 @@ export const createInvoiceDocument = (
                 {/* HEADER */}
                 <View style={styles.header}>
                     <View style={styles.logoSection}>
-                        {org.logo && <Image src={process.env.NEXTAUTH_URL + "/" + org.logo} style={styles.logo} />}
+                        {opts?.logoDataUri ? <Image src={opts.logoDataUri} style={styles.logo} /> : null}
                         <View>
                             <Text style={styles.schoolName}>{org.name}</Text>
                             <Text>{org.address || "School Address"}</Text>
@@ -193,6 +213,16 @@ export const createInvoiceDocument = (
                     {sale.customerPhone && <Text>{sale.customerPhone}</Text>}
                     {sale.bookSet?.name && <Text>Selected Set: {sale.bookSet.name}</Text>}
                 </View>
+
+                {(paymentMethodLabel || sale.paymentAcceptedByName) && (
+                    <View style={styles.section}>
+                        <Text style={styles.bold}>Payment</Text>
+                        {paymentMethodLabel && <Text>Method: {paymentMethodLabel}</Text>}
+                        {sale.paymentAcceptedByName && (
+                            <Text>Received by: {String(sale.paymentAcceptedByName)}</Text>
+                        )}
+                    </View>
+                )}
 
                 {/* TABLE */}
                 <View style={styles.table}>

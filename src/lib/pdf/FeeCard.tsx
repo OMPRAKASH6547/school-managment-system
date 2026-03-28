@@ -1,14 +1,21 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
+import type { PdfThemeColors } from "@/lib/pdf/pdfTheme";
+import { DEFAULT_PDF_THEME } from "@/lib/pdf/pdfTheme";
 
 export function createFeeCardDocument({
   org,
+  logoDataUri,
+  pdfTheme,
   payer,
   payment,
   qrDataUrl,
   acceptedByName,
 }: {
   org: { name: string; logo: string | null; address: string | null; phone: string | null; email: string | null };
+  /** Resolved data URI for PDF (local /uploads/ or remote). */
+  logoDataUri?: string | null;
+  pdfTheme?: PdfThemeColors | null;
   payer: { type: "student" | "staff"; firstName: string; lastName: string; code: string | null };
   payment: {
     id: string;
@@ -23,6 +30,7 @@ export function createFeeCardDocument({
   qrDataUrl: string;
   acceptedByName: string | null;
 }) {
+  const theme = pdfTheme ?? DEFAULT_PDF_THEME;
   const styles = StyleSheet.create({
     page: {
       padding: 28,
@@ -44,8 +52,9 @@ export function createFeeCardDocument({
       width: 52,
       height: 52,
       borderRadius: 10,
-      objectFit: "cover",
-      border: "1px solid #000",
+      objectFit: "contain",
+      borderWidth: 1,
+      borderColor: theme.border,
       backgroundColor: "#fff",
       padding: 4,
     },
@@ -66,17 +75,17 @@ export function createFeeCardDocument({
     },
     table: {
       borderWidth: 1,
-      borderColor: "#e2e8f0",
+      borderColor: theme.border,
     },
     row: {
       flexDirection: "row",
       borderBottomWidth: 1,
-      borderBottomColor: "#e2e8f0",
+      borderBottomColor: theme.border,
     },
     cell: {
       padding: 8,
       borderRightWidth: 1,
-      borderRightColor: "#e2e8f0",
+      borderRightColor: theme.border,
       flexGrow: 1,
     },
     cellLast: {
@@ -105,14 +114,13 @@ export function createFeeCardDocument({
       fontSize: 14,
       fontWeight: "bold",
       textAlign: "center",
+      color: theme.primary,
     },
     muted: {
       color: "#64748b",
     },
   });
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const logoSrc = org.logo ? `${baseUrl.replace(/\/$/, "")}/${org.logo}` : null;
   const paidDate = payment.paidAt ? new Date(payment.paidAt) : new Date();
   const verifiedDate = payment.verifiedAt ? new Date(payment.verifiedAt) : null;
 
@@ -121,7 +129,7 @@ export function createFeeCardDocument({
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.logoSection}>
-            {logoSrc ? <Image src={logoSrc} style={styles.logo} /> : null}
+            {logoDataUri ? <Image src={logoDataUri} style={styles.logo} /> : null}
             <View>
               <Text style={styles.schoolName}>{org.name}</Text>
               <Text style={styles.muted}>{org.address ?? "-"}</Text>

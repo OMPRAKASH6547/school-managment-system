@@ -15,10 +15,20 @@ export function ReportCardDownload({
   examId,
   schoolName,
   schoolLogo,
+  schoolAddress,
   branchName,
+  branchAddress,
+  affiliationNote,
+  academicSessionLabel,
   studentName,
   rollNo,
   className,
+  studentDob,
+  studentAddress,
+  fatherName,
+  motherName,
+  admissionNo,
+  house,
   exams,
   studentImage,
 }: {
@@ -27,10 +37,20 @@ export function ReportCardDownload({
   examId?: string | null;
   schoolName: string;
   schoolLogo: string | null;
+  schoolAddress?: string | null;
   branchName: string | null;
+  branchAddress?: string | null;
+  affiliationNote?: string | null;
+  academicSessionLabel?: string | null;
   studentName: string;
   rollNo: string | null;
   className: string | null;
+  studentDob?: string | null;
+  studentAddress?: string | null;
+  fatherName?: string | null;
+  motherName?: string | null;
+  admissionNo?: string | null;
+  house?: string | null;
   exams: ExamData[];
   studentImage: string | null;
 }) {
@@ -48,10 +68,20 @@ export function ReportCardDownload({
           examId,
           schoolName,
           schoolLogo,
+          schoolAddress: schoolAddress ?? null,
           branchName,
+          branchAddress: branchAddress ?? null,
+          affiliationNote: affiliationNote ?? null,
+          academicSessionLabel: academicSessionLabel ?? null,
           studentName,
           rollNo,
           className,
+          studentDob: studentDob ?? null,
+          studentAddress: studentAddress ?? null,
+          fatherName: fatherName ?? null,
+          motherName: motherName ?? null,
+          admissionNo: admissionNo ?? null,
+          house: house ?? null,
           exams,
           studentImage,
         }),

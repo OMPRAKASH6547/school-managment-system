@@ -14,6 +14,18 @@ interface NavItem {
   icon: string;
 }
 
+function dashboardSidebarShell(theme: string | null | undefined): string {
+  const t = theme ?? "slate";
+  const map: Record<string, string> = {
+    slate: "border-slate-700 bg-school-dark",
+    navy: "border-slate-800 bg-[#0a1628]",
+    emerald: "border-emerald-900 bg-emerald-950",
+    indigo: "border-indigo-900 bg-indigo-950",
+    rose: "border-rose-900 bg-rose-950",
+  };
+  return map[t] ?? map.slate!;
+}
+
 interface SchoolLayoutProps {
   children: React.ReactNode;
   schoolName: string;
@@ -26,6 +38,8 @@ interface SchoolLayoutProps {
   selectedBranchId: string | null;
   /** When true, layout defaulted a branch but could not set the httpOnly cookie — sync via API once. */
   needsBranchCookie?: boolean;
+  /** School setting: slate | navy | emerald | indigo | rose */
+  dashboardTheme?: string | null;
 }
 
 const navItems: NavItem[] = [
@@ -76,7 +90,9 @@ export function SchoolLayout({
   branches,
   selectedBranchId,
   needsBranchCookie = false,
+  dashboardTheme = null,
 }: SchoolLayoutProps) {
+  const sidebarShell = dashboardSidebarShell(dashboardTheme);
   const dashboardHref = role === "teacher" ? "/school/teacher" : role === "staff" ? "/school/staff-attendance" : "/school";
   const displayNavItems = navItems
     .map((item) => (item.href === "/school" ? { ...item, href: dashboardHref, label: "Dashboard" } : item))
@@ -323,7 +339,7 @@ export function SchoolLayout({
         )}
         {/* Left sidebar - dark grey */}
         <aside
-          className={`fixed left-0 top-16 z-20 h-[calc(100vh-4rem)] shrink-0 overflow-hidden border-r border-slate-700 bg-school-dark flex flex-col transform transition-all duration-200 ${
+          className={`fixed left-0 top-16 z-20 flex h-[calc(100vh-4rem)] shrink-0 transform flex-col overflow-hidden border-r transition-all duration-200 ${sidebarShell} ${
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           } ${menuCollapsed ? "w-20" : "w-64"} lg:translate-x-0`}
         >

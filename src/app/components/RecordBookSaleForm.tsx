@@ -22,6 +22,15 @@ type LookupStudent = {
 
 const MAX_SUGGESTIONS = 10;
 
+const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "upi", label: "UPI" },
+  { value: "card", label: "Card" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "cheque", label: "Cheque" },
+  { value: "other", label: "Other" },
+];
+
 function productLabel(p: Product) {
   return `${p.name} — ₹${p.price} [${p.id.slice(-6)}]`;
 }
@@ -30,10 +39,15 @@ export function RecordBookSaleForm({
   products,
   sets,
   organizationId,
+  sellerDisplayName,
+  sellerEmail,
 }: {
   products: Product[];
   sets: BookSet[];
   organizationId: string;
+  /** Logged-in user name saved on the sale (read-only; server uses session). */
+  sellerDisplayName: string;
+  sellerEmail?: string | null;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -44,6 +58,7 @@ export function RecordBookSaleForm({
   const [lookupStudent, setLookupStudent] = useState<LookupStudent | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [bookSetId, setBookSetId] = useState("");
   const [bookSetQuery, setBookSetQuery] = useState("");
   const [bookSetOpen, setBookSetOpen] = useState(false);
@@ -135,6 +150,7 @@ export function RecordBookSaleForm({
           customerName: customerName || null,
           customerPhone: customerPhone || null,
           bookSetId: bookSetId || null,
+          paymentMethod,
           items: valid.map((i) => ({ productId: i.productId, quantity: i.quantity })),
         }),
       });
@@ -148,6 +164,7 @@ export function RecordBookSaleForm({
       setBookSetId("");
       setBookSetQuery("");
       setBookSetOpen(false);
+      setPaymentMethod("cash");
       router.refresh();
     } catch {
       setError("Something went wrong");
@@ -271,6 +288,34 @@ export function RecordBookSaleForm({
         <label className="block text-sm font-medium text-slate-700">Customer phone</label>
         <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="input-field mt-1" />
       </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Payment method *</label>
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          className="input-field mt-1"
+          required
+        >
+          {PAYMENT_METHOD_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        <span className="font-medium text-slate-800">Sale recorded under your login</span>
+        <p className="mt-1">
+          <span className="font-medium">{sellerDisplayName || "—"}</span>
+          {sellerEmail ? <span className="text-slate-600"> · {sellerEmail}</span> : null}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          This name is saved on the invoice and recent sales (from your session, not editable here).
+        </p>
+      </div>
+
       {selectedSet ? (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex items-center justify-between">

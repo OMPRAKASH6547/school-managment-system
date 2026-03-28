@@ -6,6 +6,15 @@ import { DeleteRowButton } from "@/app/components/DeleteRowButton";
 
 const PAGE_SIZE = 12;
 
+const PAYMENT_LABEL: Record<string, string> = {
+  cash: "Cash",
+  upi: "UPI",
+  card: "Card",
+  bank_transfer: "Bank transfer",
+  cheque: "Cheque",
+  other: "Other",
+};
+
 export default async function BooksPage({
   searchParams,
 }: {
@@ -58,6 +67,8 @@ export default async function BooksPage({
     }),
     prisma.bookProduct.count({ where: productWhere }),
   ]);
+
+  const sellerDisplayName = session?.name?.trim() || session?.email?.trim() || "Logged-in user";
   const pageCount = Math.max(1, Math.ceil(productsCount / PAGE_SIZE));
   const prevPage = Math.max(1, page - 1);
   const nextPage = Math.min(pageCount, page + 1);
@@ -163,6 +174,8 @@ export default async function BooksPage({
               })),
             }))}
             organizationId={orgId}
+            sellerDisplayName={sellerDisplayName}
+            sellerEmail={session?.email ?? null}
           />
         </div>
       </div>
@@ -177,6 +190,8 @@ export default async function BooksPage({
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Invoice</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Payment</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Received by</th>
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase text-slate-500">PDF</th>
               </tr>
             </thead>
@@ -186,6 +201,10 @@ export default async function BooksPage({
                   <td className="px-6 py-4 font-medium text-school-navy">{sale.invoiceNo ?? sale.id.slice(0, 8)}</td>
                   <td className="px-6 py-4 text-slate-600">{new Date(sale.soldAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4 text-slate-600">₹{sale.totalAmount}</td>
+                  <td className="px-6 py-4 text-slate-600">
+                    {sale.paymentMethod ? PAYMENT_LABEL[sale.paymentMethod] ?? sale.paymentMethod : "—"}
+                  </td>
+                  <td className="px-6 py-4 text-slate-600">{sale.paymentAcceptedByName?.trim() || "—"}</td>
                   <td className="px-6 py-4 text-right">
                     <a href={`/api/pdf/book-invoice/${sale.id}`} target="_blank" rel="noopener noreferrer" className="text-school-green hover:underline text-sm">
                       Download PDF

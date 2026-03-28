@@ -24,6 +24,10 @@ model Organization {
   country     String   @default("India")
   logo        String?
   website     String?
+  // Hex accent for PDFs (e.g. #1e40af). Null = default blue theme.
+  pdfAccentColor String?
+  // Dashboard sidebar palette: slate | navy | emerald | indigo | rose
+  dashboardTheme String? @default("slate")
   status      String   @default("pending") // pending | approved | rejected | suspended
   approvedAt  DateTime?
   approvedBy  String?
@@ -455,6 +459,9 @@ model BookSale {
   totalAmount    Float
   customerName   String?
   customerPhone  String?
+  paymentMethod  String?  // cash | upi | card | bank_transfer | cheque | other
+  paymentAcceptedByName    String?  // employee who took payment (display)
+  paymentAcceptedByStaffId String?  // optional Staff id when picked from list
   status         String   @default("completed")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

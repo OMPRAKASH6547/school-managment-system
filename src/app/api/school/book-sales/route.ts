@@ -5,12 +5,15 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 
+const PAYMENT_METHODS = ["cash", "upi", "card", "bank_transfer", "cheque", "other"] as const;
+
 const bodySchema = z.object({
   organizationId: z.string(),
   studentId: z.string().nullable().optional(),
   bookSetId: z.string().nullable().optional(),
   customerName: z.string().nullable().optional(),
   customerPhone: z.string().nullable().optional(),
+  paymentMethod: z.enum(PAYMENT_METHODS),
   items: z.array(z.object({ productId: z.string(), quantity: z.number().int().min(1) })),
 });
 
@@ -61,6 +64,20 @@ export async function POST(req: NextRequest) {
     }
     if (saleItems.length === 0) return NextResponse.json({ error: "No valid items" }, { status: 400 });
 
+    // Always tie the sale to the logged-in user (same name as login / session).
+    const paymentAcceptedByName = (session.name?.trim() || session.email?.trim() || "Staff").slice(0, 200);
+
+    const sellerStaff = await prisma.staff.findFirst({
+      where: {
+        organizationId: orgId,
+        branchId,
+        email: { equals: session.email, mode: "insensitive" },
+        status: "active",
+      },
+      select: { id: true },
+    });
+    const paymentAcceptedByStaffId: string | null = sellerStaff?.id ?? null;
+
     const count = await prisma.bookSale.count({ where: { organizationId: orgId } });
     const invoiceNo = `INV-${String(count + 1).padStart(5, "0")}`;
 
@@ -74,6 +91,9 @@ export async function POST(req: NextRequest) {
         totalAmount,
         customerName: data.customerName ?? null,
         customerPhone: data.customerPhone ?? null,
+        paymentMethod: data.paymentMethod,
+        paymentAcceptedByName,
+        paymentAcceptedByStaffId,
         items: {
           create: saleItems.map((i) => ({
             productId: i.productId,

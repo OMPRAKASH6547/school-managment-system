@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { LogoUploadForm } from "@/app/components/LogoUploadForm";
 import { BranchCreateForm } from "@/app/components/BranchCreateForm";
+import { SchoolAppearanceForm } from "@/app/components/SchoolAppearanceForm";
 import { redirect } from "next/navigation";
 
 export default async function SchoolSettingsPage() {
@@ -29,6 +30,10 @@ export default async function SchoolSettingsPage() {
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-school-navy">School logo</h2>
         <LogoUploadForm currentLogo={org.logo} organizationId={orgId} />
+      </div>
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-school-navy">Appearance & PDF theme</h2>
+        <SchoolAppearanceForm pdfAccentColor={org.pdfAccentColor} dashboardTheme={org.dashboardTheme} />
       </div>
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-school-navy">School details</h2>

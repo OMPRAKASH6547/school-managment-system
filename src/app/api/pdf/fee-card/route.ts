@@ -6,6 +6,8 @@ import { Readable } from "node:stream";
 import { prisma } from "@/lib/db";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createFeeCardDocument } from "@/lib/pdf/FeeCard";
+import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
+import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 import { requirePermission } from "@/lib/permissions";
 
 async function nodeStreamToUint8Array(stream: Readable): Promise<Uint8Array> {
@@ -45,7 +47,9 @@ export async function POST(req: NextRequest) {
         student: { select: { id: true, firstName: true, lastName: true, rollNo: true } },
         staff: { select: { id: true, firstName: true, lastName: true, employeeId: true } },
         collectedBy: { select: { id: true, firstName: true, lastName: true } },
-        organization: { select: { id: true, name: true, logo: true, address: true, phone: true, email: true } },
+        organization: {
+          select: { id: true, name: true, logo: true, address: true, phone: true, email: true, pdfAccentColor: true },
+        },
       },
     });
 
@@ -83,8 +87,13 @@ export async function POST(req: NextRequest) {
     const receiptDate = payment.verifiedAt.toISOString().slice(0, 10);
     const filename = `${payerNameSafe || "payment"}_receipt_${receiptDate}.pdf`;
 
+    const logoDataUri = await loadImageDataUriForPdf(payment.organization.logo);
+    const pdfTheme = pdfThemeFromAccent(payment.organization.pdfAccentColor);
+
     const doc = createFeeCardDocument({
       org: payment.organization,
+      logoDataUri,
+      pdfTheme,
       payer: payment.student
         ? { type: "student", firstName: payment.student.firstName, lastName: payment.student.lastName, code: payment.student.rollNo }
         : { type: "staff", firstName: payment.staff?.firstName ?? "", lastName: payment.staff?.lastName ?? "", code: payment.staff?.employeeId ?? null },

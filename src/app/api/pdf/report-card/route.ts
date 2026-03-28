@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import QRCode from "qrcode";
+import { prisma } from "@/lib/db";
 import { generateReportCardBuffer } from "@/lib/pdf/generateReportCard";
+import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
+import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 
 const subjectSchema = z.object({
   name: z.string(),
@@ -22,10 +25,20 @@ const bodySchema = z.object({
   examId: z.string().optional().nullable(),
   schoolName: z.string().min(1),
   schoolLogo: z.string().nullable().optional(),
+  schoolAddress: z.string().nullable().optional(),
   branchName: z.string().nullable().optional(),
+  branchAddress: z.string().nullable().optional(),
+  affiliationNote: z.string().nullable().optional(),
+  academicSessionLabel: z.string().nullable().optional(),
   studentName: z.string().min(1),
   rollNo: z.string().nullable().optional(),
   className: z.string().nullable().optional(),
+  studentDob: z.string().nullable().optional(),
+  studentAddress: z.string().nullable().optional(),
+  fatherName: z.string().nullable().optional(),
+  motherName: z.string().nullable().optional(),
+  admissionNo: z.string().nullable().optional(),
+  house: z.string().nullable().optional(),
   exams: z.array(examSchema),
   studentImage: z.string().nullable().optional(),
 });
@@ -48,6 +61,7 @@ export async function POST(req: NextRequest) {
     const normalizedExams = body.exams.map((exam) => ({
       name: exam.name,
       examType: exam.examType ?? undefined,
+      academicYear: exam.academicYear ?? null,
       subjects: exam.subjects.map((sub) => ({
         name: sub.name,
         maxMarks: sub.maxMarks,
@@ -55,16 +69,38 @@ export async function POST(req: NextRequest) {
       })),
     }));
 
+    const orgRow = await prisma.organization.findUnique({
+      where: { slug: body.slug },
+      select: { pdfAccentColor: true },
+    });
+    const pdfTheme = pdfThemeFromAccent(orgRow?.pdfAccentColor);
+
+    const [schoolLogoUrl, studentPhotoUrl] = await Promise.all([
+      loadImageDataUriForPdf(body.schoolLogo),
+      loadImageDataUriForPdf(body.studentImage),
+    ]);
+
     const pdfOutput = await generateReportCardBuffer({
       schoolName: body.schoolName,
-      schoolLogo: body.schoolLogo ?? null,
+      schoolLogoUrl,
+      schoolAddress: body.schoolAddress ?? null,
       branchName: body.branchName ?? null,
+      branchAddress: body.branchAddress ?? null,
+      affiliationNote: body.affiliationNote ?? null,
+      academicSessionLabel: body.academicSessionLabel ?? null,
       studentName: body.studentName,
       rollNo: body.rollNo ?? null,
       className: body.className ?? null,
+      studentDob: body.studentDob ?? null,
+      studentAddress: body.studentAddress ?? null,
+      fatherName: body.fatherName ?? null,
+      motherName: body.motherName ?? null,
+      admissionNo: body.admissionNo ?? null,
+      house: body.house ?? null,
+      studentPhotoUrl,
       exams: normalizedExams,
       qrDataUrl,
-      // studentImage intentionally ignored by ReportCard for now
+      pdfTheme,
     });
     const pdfBytes =
       pdfOutput instanceof Uint8Array

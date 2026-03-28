@@ -2,7 +2,11 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { ReportCardDownload } from "@/app/components/ReportCardDownload";
-import Image from "next/image";
+import {
+  PublicResultReportLayout,
+  PublicResultVerifyShell,
+  type ResultExamRow,
+} from "@/app/components/PublicResultReportLayout";
 import { publishedExamWhereForStudent } from "@/lib/public-published-exams";
 import {
   dobInputMatchesStored,
@@ -46,7 +50,7 @@ export default async function PublicResultPage({
   const branch = student.branchId
     ? await prisma.branch.findFirst({
         where: { id: student.branchId, organizationId: org.id },
-        select: { name: true, branchCode: true },
+        select: { name: true, branchCode: true, address: true },
       })
     : null;
 
@@ -65,19 +69,15 @@ export default async function PublicResultPage({
   if (!verified) {
     return (
       <div className="min-h-screen bg-slate-100 py-8 px-4">
-        <div className="mx-auto max-w-xl rounded-xl bg-white p-6 shadow">
-          <div className="mb-4 flex items-center gap-3">
-            {org.logo ? (
-              <div className="relative h-12 w-12 overflow-hidden rounded-full border border-slate-200">
-                <Image src={org.logo} alt={org.name} fill className="object-contain" />
-              </div>
-            ) : null}
-            <div>
-              <h1 className="text-xl font-bold">{org.name}</h1>
-              {branch ? <p className="text-xs text-slate-500">{branch.name} ({branch.branchCode})</p> : null}
-            </div>
-          </div>
-          <h2 className="text-base font-semibold text-slate-900">Verify student details to view result</h2>
+        <PublicResultVerifyShell
+          schoolName={org.name}
+          schoolLogo={org.logo ?? null}
+          schoolAddress={org.address ?? null}
+          branchLine={branch ? `${branch.name} (${branch.branchCode})` : null}
+          branchAddress={branch?.address ?? null}
+          titleBar="VERIFY DETAILS TO VIEW REPORT CARD"
+        >
+          <h2 className="text-base font-semibold text-slate-900">Student verification</h2>
           <p className="mt-1 text-sm text-slate-600">
             Enter student name, roll number, and date of birth exactly as on school records.
           </p>
@@ -111,14 +111,16 @@ export default async function PublicResultPage({
                 Use the calendar picker. The year must match admission records (e.g. 2006, not 2026).
               </p>
             </div>
-            <button type="submit" className="btn-primary">Show result</button>
+            <button type="submit" className="btn-primary">
+              Show result
+            </button>
           </form>
           {(nameInput || rollInput || dobInput) && !verified ? (
             <p className="mt-3 text-sm text-red-600">
               Details do not match. Check student name, roll number, and date of birth (including birth year).
             </p>
           ) : null}
-        </div>
+        </PublicResultVerifyShell>
       </div>
     );
   }
@@ -153,90 +155,89 @@ export default async function PublicResultPage({
     }),
   }));
 
+  const academicSessionLabel =
+    examCards.map((e) => e.academicYear?.trim()).find(Boolean) ?? null;
+
+  const studentDobDisplay = student.dateOfBirth
+    ? (() => {
+        const dt = new Date(student.dateOfBirth);
+        const dd = String(dt.getDate()).padStart(2, "0");
+        const mm = String(dt.getMonth() + 1).padStart(2, "0");
+        const yyyy = dt.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      })()
+    : null;
+
+  const examRows: ResultExamRow[] = exams.map((exam) => ({
+    id: exam.id,
+    name: exam.name,
+    examType: exam.examType,
+    academicYear: exam.academicYear ?? null,
+    subjects: exam.subjects.map((sub) => {
+      const r = exam.results.find((x) => x.subjectId === sub.id);
+      return {
+        name: sub.name,
+        maxMarks: sub.maxMarks,
+        obtained: r?.marksObtained ?? 0,
+      };
+    }),
+  }));
+
+  const emptyScholastic =
+    exams.length === 0
+      ? examId
+        ? "This exam is not published, or the exam link does not match your school. Ask the school for an updated result link."
+        : "No published results are available for your profile yet."
+      : null;
+
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">
-      <div className="mx-auto max-w-2xl bg-white p-6 rounded-xl shadow">
-        <div className="mb-4 flex items-center gap-3">
-          {org.logo ? (
-            <div className="relative h-12 w-12 overflow-hidden rounded-full border border-slate-200">
-              <Image src={org.logo} alt={org.name} fill className="object-contain" />
-            </div>
-          ) : null}
-          <div>
-            <h1 className="text-xl font-bold">{org.name}</h1>
-            {branch ? <p className="text-xs text-slate-500">{branch.name} ({branch.branchCode})</p> : null}
-          </div>
-        </div>
-
-        <h2 className="text-lg font-semibold">
-          {student.firstName} {student.lastName}
-        </h2>
-
-        <p className="text-sm text-gray-600">
-          {student.rollNo && `Roll No: ${student.rollNo}`}
-          {student.class && ` · ${student.class.name}`}
-        </p>
-
-        {exams.length === 0 ? (
-          <p className="mt-4 text-gray-500">
-            {examId
-              ? "This exam is not published, or the exam link does not match your school. Ask the school for an updated result link."
-              : "No published results are available for your profile yet."}
-          </p>
-        ) : (
-          exams.map((exam) => {
-            const totalMax = exam.subjects.reduce((s, sub) => s + sub.maxMarks, 0);
-            const totalObtained = exam.results.reduce((s, r) => s + r.marksObtained, 0);
-
-            const percent = totalMax > 0 ? Math.round((totalObtained / totalMax) * 100) : 0;
-
-            return (
-              <div key={exam.id} className="mt-4 border p-3 rounded">
-                <h3 className="font-semibold">{exam.name}</h3>
-
-                <p>
-                  Total: {totalObtained} / {totalMax} ({percent}%)
-                </p>
-
-                <div className="mt-3">
-                  <div className="text-xs font-medium text-slate-500">Subjects</div>
-                  <div className="mt-2 space-y-1">
-                    {exam.subjects.map((sub) => {
-                      const r = exam.results.find((x) => x.subjectId === sub.id);
-                      const obtained = r?.marksObtained ?? 0;
-                      return (
-                        <div key={sub.id} className="flex items-center justify-between gap-4 text-sm">
-                          <span className="text-slate-800">{sub.name}</span>
-                          <span className="font-medium text-slate-900">
-                            {obtained} / {sub.maxMarks}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-
-        <div className="mt-6">
+      <PublicResultReportLayout
+        schoolName={org.name}
+        schoolLogo={org.logo ?? null}
+        schoolAddress={org.address ?? null}
+        branchLine={branch ? `${branch.name} (${branch.branchCode})` : null}
+        branchAddress={branch?.address ?? null}
+        affiliationNote={null}
+        academicSessionLabel={academicSessionLabel}
+        studentName={`${student.firstName} ${student.lastName}`}
+        studentPhoto={student.image ?? null}
+        rollNo={student.rollNo ?? null}
+        className={student.class?.name ?? null}
+        studentDob={studentDobDisplay}
+        studentAddress={student.address ?? null}
+        fatherName={student.guardianName ?? null}
+        motherName={null}
+        admissionNo={null}
+        house={null}
+        exams={examRows}
+        emptyScholasticMessage={emptyScholastic}
+        actions={
           <ReportCardDownload
             slug={slug}
             token={token}
             examId={examId ?? null}
             schoolName={org.name}
             schoolLogo={org.logo ?? null}
+            schoolAddress={org.address ?? null}
             branchName={branch ? `${branch.name} (${branch.branchCode})` : null}
+            branchAddress={branch?.address ?? null}
+            affiliationNote={null}
+            academicSessionLabel={academicSessionLabel}
             studentName={`${student.firstName} ${student.lastName}`}
             rollNo={student.rollNo ?? null}
             className={student.class?.name ?? null}
+            studentDob={studentDobDisplay}
+            studentAddress={student.address ?? null}
+            fatherName={student.guardianName ?? null}
+            motherName={null}
+            admissionNo={null}
+            house={null}
             exams={examCards}
             studentImage={student.image ?? null}
           />
-        </div>
-
-      </div>
+        }
+      />
     </div>
   );
 }

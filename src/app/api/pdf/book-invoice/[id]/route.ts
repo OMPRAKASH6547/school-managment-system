@@ -6,6 +6,8 @@ import { Readable } from "node:stream";
 import { prisma } from "@/lib/db";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createInvoiceDocument } from "@/lib/pdf/BookInvoice";
+import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
+import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 import { requirePermission } from "@/lib/permissions";
 
 async function nodeStreamToUint8Array(stream: Readable): Promise<Uint8Array> {
@@ -34,7 +36,18 @@ export async function GET(
       include: {
         items: { include: { product: true } },
         bookSet: { select: { id: true, name: true } },
-        organization: { select: { id: true, name: true, logo: true, address: true, phone: true, email: true, website: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            logo: true,
+            address: true,
+            phone: true,
+            email: true,
+            website: true,
+            pdfAccentColor: true,
+          },
+        },
       },
     });
 
@@ -50,7 +63,9 @@ export async function GET(
     const verificationUrl = `${baseUrl.replace(/\/$/, "")}/school/books`;
     const qrImage = await QRCode.toDataURL(verificationUrl);
 
-    const doc = createInvoiceDocument(sale, org, qrImage);
+    const logoDataUri = await loadImageDataUriForPdf(org.logo);
+    const pdfTheme = pdfThemeFromAccent(org.pdfAccentColor);
+    const doc = createInvoiceDocument(sale, org, qrImage, { logoDataUri, pdfTheme });
     const pdfOutput = await pdf(doc).toBuffer();
     const pdfBytes =
       pdfOutput instanceof Uint8Array

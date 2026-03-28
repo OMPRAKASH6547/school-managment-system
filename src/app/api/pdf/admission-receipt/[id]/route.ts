@@ -5,6 +5,8 @@ import { Readable } from "node:stream";
 import { prisma } from "@/lib/db";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createAdmissionReceiptDocument } from "@/lib/pdf/AdmissionReceipt";
+import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
+import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 import { requirePermission } from "@/lib/permissions";
 
 async function nodeStreamToUint8Array(stream: Readable): Promise<Uint8Array> {
@@ -67,7 +69,9 @@ export async function GET(
             dateOfBirth: true,
           },
         },
-        organization: { select: { name: true, logo: true, address: true, phone: true, email: true } },
+        organization: {
+          select: { name: true, logo: true, address: true, phone: true, email: true, pdfAccentColor: true },
+        },
         verifiedBy: true,
       },
     });
@@ -90,8 +94,13 @@ export async function GET(
     const verifyUrl = `${baseUrl.replace(/\/$/, "")}/payment/verify?paymentId=${encodeURIComponent(payment.id)}`;
     const qrDataUrl = await QRCode.toDataURL(verifyUrl);
 
+    const logoDataUri = await loadImageDataUriForPdf(payment.organization.logo);
+    const pdfTheme = pdfThemeFromAccent(payment.organization.pdfAccentColor);
+
     const doc = createAdmissionReceiptDocument({
       org: payment.organization,
+      logoDataUri,
+      pdfTheme,
       student: payment.student,
       payment: {
         id: payment.id,
