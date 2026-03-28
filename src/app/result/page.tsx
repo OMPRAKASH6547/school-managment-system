@@ -1,11 +1,41 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { publishedExamWhereForBranch } from "@/lib/public-published-exams";
+import {
+  dobInputMatchesStored,
+  dobValueForDateInput,
+  normalizeRollForCompare,
+} from "@/lib/result-verification";
 
 type SearchParams = {
   schoolCode?: string;
   branchCode?: string;
   rollNumber?: string;
+  dob?: string;
 };
+
+type ResultPayload = {
+  student: {
+    firstName: string;
+    lastName: string;
+    rollNo: string | null;
+    id?: string;
+  };
+  perExam: {
+    id: string;
+    name: string;
+    examType: string;
+    totalObtained: number;
+    subjects: { name: string; marksObtained: number; maxMarks?: number }[];
+  }[];
+};
+
+type Outcome =
+  | { kind: "none" }
+  | { kind: "no_student" }
+  | { kind: "no_dob_on_file" }
+  | { kind: "dob_mismatch" }
+  | { kind: "success"; result: ResultPayload };
 
 export default async function PublicResultPage({
   searchParams,
@@ -15,64 +45,69 @@ export default async function PublicResultPage({
   const schoolCode = searchParams.schoolCode?.trim();
   const branchCode = searchParams.branchCode?.trim();
   const rollNumber = searchParams.rollNumber?.trim();
+  const dob = searchParams.dob?.trim() ?? "";
 
-  let result:
-    | null
-    | {
-        student: {
-          firstName: string;
-          lastName: string;
-          rollNo: string | null;
-          id?: string;
-        };
-        perExam: {
-          id: string;
-          name: string;
-          examType: string;
-          totalObtained: number;
-          subjects: { name: string; marksObtained: number; maxMarks?: number }[];
-        }[];
-      } = null;
+  let outcome: Outcome = { kind: "none" };
 
-  if (schoolCode && branchCode && rollNumber) {
+  const hasQuery = !!(schoolCode && branchCode && rollNumber && dob);
+
+  if (hasQuery && schoolCode && branchCode && rollNumber) {
     const org = await prisma.organization.findFirst({
-      where: { schoolCode },
+      where: {
+        schoolCode: { equals: schoolCode, mode: "insensitive" },
+      },
       select: { id: true, name: true },
     });
 
     if (!org) {
-      result = { student: { firstName: "—", lastName: "", rollNo: null }, perExam: [] };
+      outcome = { kind: "no_student" };
     } else {
       const branch = await prisma.branch.findFirst({
-        where: { branchCode, organizationId: org.id },
+        where: {
+          branchCode: { equals: branchCode, mode: "insensitive" },
+          organizationId: org.id,
+        },
         select: { id: true },
       });
 
       if (!branch) {
-        result = { student: { firstName: "—", lastName: "", rollNo: null }, perExam: [] };
+        outcome = { kind: "no_student" };
       } else {
-        const student = await prisma.student.findFirst({
+        let student = await prisma.student.findFirst({
           where: {
-            rollNo: rollNumber,
             organizationId: org.id,
             branchId: branch.id,
+            rollNo: { equals: rollNumber, mode: "insensitive" },
           },
-          select: { id: true, firstName: true, lastName: true, rollNo: true },
+          select: { id: true, firstName: true, lastName: true, rollNo: true, dateOfBirth: true },
         });
 
         if (!student) {
-          result = { student: { firstName: "—", lastName: "", rollNo: null }, perExam: [] };
+          const want = normalizeRollForCompare(rollNumber);
+          if (want) {
+            const rows = await prisma.student.findMany({
+              where: { organizationId: org.id, branchId: branch.id },
+              select: { id: true, firstName: true, lastName: true, rollNo: true, dateOfBirth: true },
+            });
+            student = rows.find((r) => normalizeRollForCompare(r.rollNo ?? "") === want) ?? null;
+          }
+        }
+
+        if (!student) {
+          outcome = { kind: "no_student" };
+        } else if (!student.dateOfBirth) {
+          outcome = { kind: "no_dob_on_file" };
+        } else if (!dobInputMatchesStored(dob, student.dateOfBirth)) {
+          outcome = { kind: "dob_mismatch" };
         } else {
           const publishedExams = await prisma.exam.findMany({
-            where: { organizationId: org.id, branchId: branch.id, status: "published" },
+            where: publishedExamWhereForBranch({ organizationId: org.id, branchId: branch.id }),
             select: { id: true, name: true, examType: true },
           });
 
           const perExam = [];
           for (const exam of publishedExams) {
             const examResults = await prisma.examResult.findMany({
-              // `exam` is already filtered by `branchId`, so we don't additionally require
-              // `examResult.branchId` (it can be null for older data).
               where: { examId: exam.id, studentId: student.id },
               include: { subject: true },
             });
@@ -94,16 +129,19 @@ export default async function PublicResultPage({
             });
           }
 
-          result = {
-            student,
-            perExam,
+          outcome = {
+            kind: "success",
+            result: {
+              student,
+              perExam,
+            },
           };
         }
       }
     }
   }
 
-  const hasQuery = !!(schoolCode && branchCode && rollNumber);
+  const result = outcome.kind === "success" ? outcome.result : null;
   const hasResults = !!result && result.perExam.length > 0;
 
   return (
@@ -112,7 +150,10 @@ export default async function PublicResultPage({
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Public Result</h1>
-            <p className="mt-1 text-sm text-slate-600">Enter school code, branch code, and roll number.</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Enter school code, branch code, roll number, and date of birth. Results load on submit (no separate API
+              call in the browser).
+            </p>
           </div>
           <Link href="/" className="text-sm font-medium text-primary-600 hover:underline">
             Home
@@ -121,7 +162,7 @@ export default async function PublicResultPage({
 
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <form method="get" className="grid gap-4">
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700">School code</label>
                 <input
@@ -140,11 +181,23 @@ export default async function PublicResultPage({
                   required
                 />
               </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700">Roll number</label>
                 <input
                   name="rollNumber"
                   defaultValue={rollNumber ?? ""}
+                  className="input-field mt-1 w-full"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Date of birth</label>
+                <input
+                  type="date"
+                  name="dob"
+                  defaultValue={dobValueForDateInput(dob)}
                   className="input-field mt-1 w-full"
                   required
                 />
@@ -164,20 +217,24 @@ export default async function PublicResultPage({
 
         {hasQuery && (
           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            {!hasResults ? (
+            {outcome.kind === "no_student" ? (
               <div className="text-sm text-slate-600">
-                {result?.student?.firstName === "—"
-                  ? "No student found for this school/branch/roll number."
-                  : "No published results found yet."}
+                No student found for this school code, branch code, and roll number.
               </div>
+            ) : outcome.kind === "no_dob_on_file" ? (
+              <div className="text-sm text-slate-600">
+                Date of birth is not on file for this student. Please contact the school.
+              </div>
+            ) : outcome.kind === "dob_mismatch" ? (
+              <div className="text-sm text-red-600">Invalid roll number or date of birth.</div>
+            ) : !hasResults ? (
+              <div className="text-sm text-slate-600">No published results found yet.</div>
             ) : (
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   {result?.student.firstName} {result?.student.lastName}
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Roll: {result?.student.rollNo ?? "—"}
-                </p>
+                <p className="mt-1 text-sm text-slate-600">Roll: {result?.student.rollNo ?? "—"}</p>
 
                 <div className="mt-6 space-y-4">
                   {result?.perExam.map((e) => (
@@ -217,4 +274,3 @@ export default async function PublicResultPage({
     </div>
   );
 }
-

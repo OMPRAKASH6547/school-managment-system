@@ -15,7 +15,7 @@ export default async function NewStaffPage() {
   const sorted = [...branches].sort((a, b) => (a.id === branchId ? -1 : b.id === branchId ? 1 : 0));
   const classes = await prisma.class.findMany({
     where: { organizationId: orgId, status: "active" },
-    select: { id: true, name: true, branchId: true },
+    select: { id: true, name: true, branchId: true, subjects: true },
     orderBy: { name: "asc" },
   });
 

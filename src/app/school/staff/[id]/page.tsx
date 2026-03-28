@@ -33,7 +33,7 @@ export default async function EditStaffPage({
     prisma.class.findMany({
       where: { organizationId: orgId, status: "active" },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, branchId: true },
+      select: { id: true, name: true, branchId: true, subjects: true },
     }),
     prisma.teacherAssignment.findMany({
       where: {
@@ -41,7 +41,7 @@ export default async function EditStaffPage({
         branchId: staff.branchId ?? branchId,
         teacherStaffId: staff.id,
       },
-      select: { classId: true },
+      select: { classId: true, subjects: true },
     }),
   ]);
 
@@ -66,7 +66,9 @@ export default async function EditStaffPage({
           initialModuleAccess={initialModuleAccess}
           classes={classes}
           initialTeacherClassIds={assignments.map((a) => a.classId)}
-          initialTeacherClassSubjects={{}}
+          initialTeacherClassSubjects={Object.fromEntries(
+            assignments.map((a) => [a.classId, (a.subjects ?? "").trim()])
+          )}
           initialGeneratedLoginPassword={(staff as any).generatedLoginPassword ?? null}
         />
       </div>

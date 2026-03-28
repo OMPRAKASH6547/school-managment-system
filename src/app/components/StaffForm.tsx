@@ -45,6 +45,12 @@ const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "hostel", label: "Hostel" },
 ];
 
+/** Subjects configured on the class (comma-separated). */
+function parseClassSubjectsCsv(text: string | null | undefined): string[] {
+  if (!text?.trim()) return [];
+  return [...new Set(text.split(",").map((s) => s.trim()).filter(Boolean))];
+}
+
 function blankAccess(): ModuleAccessMap {
   return {
     students: { view: false, add: false, edit: false, delete: false },
@@ -217,7 +223,7 @@ export function StaffForm({
   staff?: Staff | null;
   branches?: { id: string; name: string; branchCode: string }[];
   initialModuleAccess?: Partial<ModuleAccessMap> | null;
-  classes?: { id: string; name: string; branchId: string | null }[];
+  classes?: { id: string; name: string; branchId: string | null; subjects?: string | null }[];
   initialTeacherClassIds?: string[];
   initialTeacherClassSubjects?: Record<string, string>;
   initialGeneratedLoginPassword?: string | null;
@@ -244,9 +250,6 @@ export function StaffForm({
       : defaultAccessByRole(staff?.role ?? "teacher")
   );
   const [teacherClassIds, setTeacherClassIds] = useState<string[]>(initialTeacherClassIds);
-  const defaultSubjectOptions = ["Math", "Science", "English", "Hindi", "SST", "Computer"];
-  const [subjectOptions, setSubjectOptions] = useState<string[]>(defaultSubjectOptions);
-  const [newSubject, setNewSubject] = useState("");
   const [teacherClassSubjects, setTeacherClassSubjects] = useState<Record<string, string[]>>(() => {
     const next: Record<string, string[]> = {};
     for (const [classId, v] of Object.entries(initialTeacherClassSubjects)) {
@@ -254,6 +257,23 @@ export function StaffForm({
     }
     return next;
   });
+
+  useEffect(() => {
+    setTeacherClassSubjects((prev) => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+      for (const classId of teacherClassIds) {
+        const cls = classes.find((c) => c.id === classId);
+        const allowed = new Set(parseClassSubjectsCsv(cls?.subjects ?? null));
+        const cur = prev[classId] ?? [];
+        const filtered = cur.filter((s) => allowed.has(s));
+        if (filtered.length !== cur.length) changed = true;
+        next[classId] = filtered;
+      }
+      if (Object.keys(prev).some((k) => !teacherClassIds.includes(k))) changed = true;
+      return changed ? next : prev;
+    });
+  }, [teacherClassIds, classes]);
 
   const url = staff ? `/api/school/staff/${staff.id}` : "/api/school/staff";
   async function handleSubmit(e: React.FormEvent) {
@@ -353,30 +373,9 @@ export function StaffForm({
       {form.role === "teacher" && (
         <div className="rounded-lg border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-800">Teacher class assignment</p>
-          <p className="mt-1 text-xs text-slate-500">Select multiple classes and subjects.</p>
-          <div className="mt-3">
-            <label className="block text-sm font-medium text-slate-700">Add subject option</label>
-            <div className="mt-1 flex gap-2">
-              <input
-                value={newSubject}
-                onChange={(e) => setNewSubject(e.target.value)}
-                className="input-field flex-1"
-                placeholder="e.g. Biology"
-              />
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  const v = newSubject.trim();
-                  if (!v) return;
-                  if (!subjectOptions.includes(v)) setSubjectOptions((prev) => [...prev, v]);
-                  setNewSubject("");
-                }}
-              >
-                Add subject
-              </button>
-            </div>
-          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Subject choices come from each class&apos;s subject list (set when the class is created or edited).
+          </p>
           <div className="mt-3">
             <label className="block text-sm font-medium text-slate-700">Classes *</label>
             <div className="mt-1">
@@ -405,22 +404,30 @@ export function StaffForm({
               <label className="block text-sm font-medium text-slate-700">Subjects per class</label>
               {teacherClassIds.map((classId) => {
                 const cls = classes.find((c) => c.id === classId);
+                const subjectChoices = parseClassSubjectsCsv(cls?.subjects ?? null);
                 return (
                   <div key={classId}>
                     <label className="block text-xs text-slate-500">{cls?.name ?? classId}</label>
-                    <div className="mt-1">
-                      <ChipsMultiSelect
-                        options={subjectOptions.map((s) => ({ value: s, label: s }))}
-                        value={teacherClassSubjects[classId] ?? []}
-                        onChange={(next) =>
-                          setTeacherClassSubjects((prev) => ({
-                            ...prev,
-                            [classId]: next,
-                          }))
-                        }
-                        placeholder="Select subjects"
-                      />
-                    </div>
+                    {subjectChoices.length === 0 ? (
+                      <p className="mt-1 text-xs text-amber-700">
+                        No subjects on file for this class. Add subjects under{" "}
+                        <span className="font-medium">Classes</span> for this class, then return here.
+                      </p>
+                    ) : (
+                      <div className="mt-1">
+                        <ChipsMultiSelect
+                          options={subjectChoices.map((s) => ({ value: s, label: s }))}
+                          value={teacherClassSubjects[classId] ?? []}
+                          onChange={(next) =>
+                            setTeacherClassSubjects((prev) => ({
+                              ...prev,
+                              [classId]: next,
+                            }))
+                          }
+                          placeholder="Select subjects for this class"
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}

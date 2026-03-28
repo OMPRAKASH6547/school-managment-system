@@ -3,33 +3,29 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { ReportCardDownload } from "@/app/components/ReportCardDownload";
 import Image from "next/image";
-
-function formatDateLocal(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function formatDateUTC(date: Date): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(date.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+import { publishedExamWhereForStudent } from "@/lib/public-published-exams";
+import {
+  dobInputMatchesStored,
+  dobValueForDateInput,
+  formatDateLocal,
+  formatDateUTC,
+  normalizeRollForCompare,
+  studentNameMatchesInput,
+} from "@/lib/result-verification";
 
 export default async function PublicResultPage({
   params,
   searchParams,
 }: {
   params: { slug: string; token: string };
-  searchParams?: { exam?: string; roll?: string; dob?: string };
+  searchParams?: { exam?: string; roll?: string; dob?: string; name?: string };
 }) {
   const { slug, token } = params;
   if (token.startsWith("disabled_")) notFound();
   const examId = searchParams?.exam?.trim();
   const rollInput = searchParams?.roll?.trim() ?? "";
   const dobInput = searchParams?.dob?.trim() ?? "";
+  const nameInput = searchParams?.name?.trim() ?? "";
 
   const org = await prisma.organization.findUnique({
     where: { slug },
@@ -54,15 +50,17 @@ export default async function PublicResultPage({
       })
     : null;
 
-  const expectedRoll = (student.rollNo ?? "").trim().toLowerCase();
+  const expectedRollNorm = normalizeRollForCompare(student.rollNo ?? "");
   const expectedDobLocal = student.dateOfBirth ? formatDateLocal(new Date(student.dateOfBirth)) : "";
   const expectedDobUtc = student.dateOfBirth ? formatDateUTC(new Date(student.dateOfBirth)) : "";
-  const dobMatches = !!dobInput && (dobInput === expectedDobLocal || dobInput === expectedDobUtc);
+  const dobMatches = dobInputMatchesStored(dobInput, student.dateOfBirth);
+  const nameMatches = studentNameMatchesInput(nameInput, student.firstName, student.lastName);
   const verified =
-    !!expectedRoll &&
+    !!expectedRollNorm &&
     !!(expectedDobLocal || expectedDobUtc) &&
-    rollInput.toLowerCase() === expectedRoll &&
-    dobMatches;
+    normalizeRollForCompare(rollInput) === expectedRollNorm &&
+    dobMatches &&
+    nameMatches;
 
   if (!verified) {
     return (
@@ -80,21 +78,45 @@ export default async function PublicResultPage({
             </div>
           </div>
           <h2 className="text-base font-semibold text-slate-900">Verify student details to view result</h2>
-          <p className="mt-1 text-sm text-slate-600">Enter roll number and date of birth.</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Enter student name, roll number, and date of birth exactly as on school records.
+          </p>
           <form method="get" className="mt-4 space-y-3">
             {examId ? <input type="hidden" name="exam" value={examId} /> : null}
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Student name</label>
+              <input
+                name="name"
+                autoComplete="name"
+                placeholder="Full name as on admission"
+                defaultValue={nameInput}
+                className="input-field mt-1"
+                required
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">Roll number</label>
               <input name="roll" defaultValue={rollInput} className="input-field mt-1" required />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">Date of birth</label>
-              <input type="date" name="dob" defaultValue={dobInput} className="input-field mt-1" required />
+              <input
+                type="date"
+                name="dob"
+                defaultValue={dobValueForDateInput(dobInput)}
+                className="input-field mt-1"
+                required
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Use the calendar picker. The year must match admission records (e.g. 2006, not 2026).
+              </p>
             </div>
             <button type="submit" className="btn-primary">Show result</button>
           </form>
-          {(rollInput || dobInput) && !verified ? (
-            <p className="mt-3 text-sm text-red-600">Invalid roll number or date of birth.</p>
+          {(nameInput || rollInput || dobInput) && !verified ? (
+            <p className="mt-3 text-sm text-red-600">
+              Details do not match. Check student name, roll number, and date of birth (including birth year).
+            </p>
           ) : null}
         </div>
       </div>
@@ -102,12 +124,12 @@ export default async function PublicResultPage({
   }
 
   const exams = await prisma.exam.findMany({
-    where: {
+    where: publishedExamWhereForStudent({
       organizationId: org.id,
-      branchId: student.branchId ?? undefined,
-      status: "published",
-      ...(examId ? { id: examId } : {}),
-    },
+      studentBranchId: student.branchId,
+      classBranchId: student.class?.branchId ?? null,
+      examId: examId || undefined,
+    }),
     orderBy: { createdAt: "desc" },
     include: {
       subjects: { orderBy: { order: "asc" } },
@@ -156,7 +178,11 @@ export default async function PublicResultPage({
         </p>
 
         {exams.length === 0 ? (
-          <p className="mt-4 text-gray-500">No results</p>
+          <p className="mt-4 text-gray-500">
+            {examId
+              ? "This exam is not published, or the exam link does not match your school. Ask the school for an updated result link."
+              : "No published results are available for your profile yet."}
+          </p>
         ) : (
           exams.map((exam) => {
             const totalMax = exam.subjects.reduce((s, sub) => s + sub.maxMarks, 0);

@@ -20,7 +20,7 @@ export async function POST(
       where: {
         id,
         organizationId: session.organizationId!,
-        branchId,
+        OR: [{ branchId }, { branchId: null }],
       },
       include: {
         results: {
@@ -44,14 +44,14 @@ export async function POST(
         const token = randomBytes(24).toString("base64url");
         // Enforce branch isolation when updating resultToken
         return prisma.student.updateMany({
-          where: { id: studentId, organizationId: session.organizationId!, branchId },
+          where: { id: studentId, organizationId: session.organizationId! },
           data: { resultToken: token },
         });
       })
     );
 
     const update = await prisma.exam.updateMany({
-      where: { id, organizationId: session.organizationId!, branchId },
+      where: { id, organizationId: session.organizationId! },
       data: { status: "published" },
     });
     if (update.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
