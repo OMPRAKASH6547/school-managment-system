@@ -24,6 +24,7 @@ type ResultPayload = {
     rollNo: string | null;
     id: string;
     address: string | null;
+    fatherName: string | null;
     guardianName: string | null;
     image: string | null;
     dateOfBirth: Date | null;
