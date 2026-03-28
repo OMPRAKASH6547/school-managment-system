@@ -125,9 +125,9 @@ export async function GET(
       typeof pdfOutput === "object" &&
       pdfOutput !== null &&
       "getReader" in pdfOutput &&
-      typeof (pdfOutput as ReadableStream<Uint8Array>).getReader === "function"
+      typeof (pdfOutput as unknown as ReadableStream<Uint8Array>).getReader === "function"
     ) {
-      pdfBytes = await webStreamToUint8Array(pdfOutput as ReadableStream<Uint8Array>);
+      pdfBytes = await webStreamToUint8Array(pdfOutput as unknown as ReadableStream<Uint8Array>);
     } else {
       throw new Error("Unsupported PDF output type");
     }
