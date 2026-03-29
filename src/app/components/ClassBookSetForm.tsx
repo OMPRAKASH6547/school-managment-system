@@ -15,6 +15,10 @@ type SetItem = {
 
 export function ClassBookSetForm({ classes }: { classes: ClassOpt[] }) {
   const router = useRouter();
+  const classItems = useMemo(
+    () => classes.map((c) => ({ value: c.id, label: c.name })),
+    [classes]
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [classId, setClassId] = useState(classes[0]?.id ?? "");

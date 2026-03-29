@@ -61,11 +61,11 @@ export async function POST(
 
     const data = bodySchema.parse(await req.json());
 
-    async function generateUniqueRollNo(params: {
+    const generateUniqueRollNo = async (params: {
       organizationId: string;
       branchId: string;
       dateOfBirth: Date | null;
-    }): Promise<string> {
+    }): Promise<string> => {
       const { organizationId, branchId, dateOfBirth } = params;
       const nowYY = String(new Date().getFullYear()).slice(-2);
       const dobYear = dateOfBirth ? dateOfBirth.getFullYear() : new Date().getFullYear();
@@ -80,7 +80,7 @@ export async function POST(
         if (!exists) return candidate;
       }
       return `${nowYY}${dobYY}${String(Date.now()).slice(-4)}`;
-    }
+    };
 
     // Roll number is system-managed only.
     const rollNo =
@@ -91,7 +91,7 @@ export async function POST(
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : student.dateOfBirth,
       }));
 
-    async function generateUniqueResultToken(): Promise<string> {
+    const generateUniqueResultToken = async (): Promise<string> => {
       // Ensure token is non-null so Mongo unique index never collides on `null`.
       for (let attempt = 0; attempt < 20; attempt++) {
         const token = randomBytes(12).toString("base64url");
@@ -102,7 +102,7 @@ export async function POST(
         if (!exists) return token;
       }
       return randomBytes(16).toString("base64url");
-    }
+    };
 
     const resultToken =
       student.resultToken && student.resultToken.trim().length > 0 ? student.resultToken : await generateUniqueResultToken();

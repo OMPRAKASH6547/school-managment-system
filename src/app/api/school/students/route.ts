@@ -64,10 +64,10 @@ export async function POST(req: NextRequest) {
 
     const branchId = await resolveBranchIdForOrganization(session.organizationId!, await getSelectedBranchId());
 
-    async function generateUniqueResultToken(params: {
+    const generateUniqueResultToken = async (params: {
       organizationId: string;
       branchId: string;
-    }): Promise<string> {
+    }): Promise<string> => {
       void params;
 
       // Ensure token is non-null so Mongo unique index never collides on `null`.
@@ -82,13 +82,13 @@ export async function POST(req: NextRequest) {
 
       // Extremely unlikely fallback.
       return randomBytes(16).toString("base64url");
-    }
+    };
 
-    async function generateUniqueRollNo(params: {
+    const generateUniqueRollNo = async (params: {
       organizationId: string;
       branchId: string;
       dateOfBirth: Date;
-    }): Promise<string> {
+    }): Promise<string> => {
       const { organizationId, branchId, dateOfBirth } = params;
       const nowYY = String(new Date().getFullYear()).slice(-2);
       const dobYY = String(dateOfBirth.getFullYear()).slice(-2);
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
 
       // Very unlikely fallback preserving the requested prefix.
       return `${nowYY}${dobYY}${String(Date.now()).slice(-4)}`;
-    }
+    };
 
     const aadhaarNo = data.aadhaarNo;
     const bloodGroup = data.bloodGroup;

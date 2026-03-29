@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SearchablePaginatedSelect, type SearchableSelectItem } from "@/app/components/SearchablePaginatedSelect";
+import {
+  ACTIVE_INACTIVE_STATUS_ITEMS,
+  SearchablePaginatedSelect,
+  type SearchableSelectItem,
+} from "@/app/components/SearchablePaginatedSelect";
 
 type Class = {
   id: string;
@@ -138,7 +142,7 @@ export function ClassForm({ cls }: { cls?: Class | null }) {
         <div>
           <label className="block text-sm font-medium text-slate-700">Status</label>
           <SearchablePaginatedSelect
-            items={classStatusItems}
+            items={ACTIVE_INACTIVE_STATUS_ITEMS}
             value={form.status}
             onChange={(v) => setForm((f) => ({ ...f, status: v }))}
             emptyLabel="Status"

@@ -142,7 +142,9 @@ function scholasticLayout(exams: Exam[]) {
   if (exams.length === 1) return { kind: "single" as const, exam: exams[0]! };
   const term2 = exams[0]!;
   const term1 = exams[1]!;
-  const names = [...new Set([...term1.subjects.map((s) => s.name), ...term2.subjects.map((s) => s.name)])];
+  const names = Array.from(
+    new Set([...term1.subjects.map((s) => s.name), ...term2.subjects.map((s) => s.name)])
+  );
   return { kind: "dual" as const, term1, term2, subjectNames: names };
 }
 

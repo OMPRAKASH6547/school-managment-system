@@ -24,7 +24,7 @@ export default async function HostelRoomDetailPage({
   });
   if (!room) notFound();
 
-  const allocationStudentIds = [...new Set(room.allocations.map((a) => a.studentId))];
+  const allocationStudentIds = Array.from(new Set(room.allocations.map((a) => a.studentId)));
   const allocationStudents =
     allocationStudentIds.length > 0
       ? await prisma.student.findMany({

@@ -240,3 +240,11 @@ export const BOOK_PRODUCT_CATEGORY_ITEMS: SearchableSelectItem[] = [
   { value: "copy", label: "Copy" },
   { value: "stationery", label: "Stationery" },
 ];
+
+/** active | inactive — shared by book products, classes, etc. */
+export const ACTIVE_INACTIVE_STATUS_ITEMS: SearchableSelectItem[] = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+export const BOOK_PRODUCT_STATUS_ITEMS = ACTIVE_INACTIVE_STATUS_ITEMS;

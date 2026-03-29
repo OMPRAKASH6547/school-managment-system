@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "target": "ES2022",
     "lib": [
       "dom",
       "dom.iterable",
@@ -35,6 +36,5 @@
   ],
   "exclude": [
     "node_modules"
-  ],
-  "skipLibCheck": true,
+  ]
 }

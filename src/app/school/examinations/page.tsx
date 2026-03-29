@@ -1,9 +1,14 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { DeleteExamButton } from "@/app/components/DeleteExamButton";
 import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canPermission } from "@/lib/permissions";
+
+type ExaminationListItem = Prisma.ExamGetPayload<{
+  include: { _count: { select: { results: true } }; subjects: true };
+}>;
 
 export default async function ExaminationsPage() {
   const session = await getSession();
@@ -20,33 +25,36 @@ export default async function ExaminationsPage() {
   const canDeleteExam =
     !!session && canPermission(session.role, "examinations", "write", session.permissions ?? null);
 
-  let exams;
+  let exams: ExaminationListItem[];
   if (session?.role === "staff" && !staffTeacher) redirect("/school/staff-attendance");
   if (session?.role === "accountant") redirect("/school");
   if (isTeacherUser) {
-    if (!branchId) return [];
-    const teacherStaff = staffTeacher
-      ? staffTeacher
-      : await prisma.staff.findFirst({
-          where: { email: session!.email, organizationId: orgId, branchId, role: "teacher", status: "active" },
-          select: { id: true },
-        });
-    if (!teacherStaff) return notFound();
-
-    const assigned = await prisma.teacherAssignment.findMany({
-      where: { teacherStaffId: teacherStaff.id, organizationId: orgId, branchId },
-      select: { classId: true },
-    });
-    const classIds = assigned.map((a) => a.classId);
-
-    if (classIds.length === 0) {
+    if (!branchId) {
       exams = [];
     } else {
-      exams = await prisma.exam.findMany({
-        where: { organizationId: orgId, branchId, classId: { in: classIds } },
-        orderBy: { createdAt: "desc" },
-        include: { _count: { select: { results: true } }, subjects: true },
+      const teacherStaff = staffTeacher
+        ? staffTeacher
+        : await prisma.staff.findFirst({
+            where: { email: session!.email, organizationId: orgId, branchId, role: "teacher", status: "active" },
+            select: { id: true },
+          });
+      if (!teacherStaff) return notFound();
+
+      const assigned = await prisma.teacherAssignment.findMany({
+        where: { teacherStaffId: teacherStaff.id, organizationId: orgId, branchId },
+        select: { classId: true },
       });
+      const classIds = assigned.map((a) => a.classId);
+
+      if (classIds.length === 0) {
+        exams = [];
+      } else {
+        exams = await prisma.exam.findMany({
+          where: { organizationId: orgId, branchId, classId: { in: classIds } },
+          orderBy: { createdAt: "desc" },
+          include: { _count: { select: { results: true } }, subjects: true },
+        });
+      }
     }
   } else {
     exams = await prisma.exam.findMany({

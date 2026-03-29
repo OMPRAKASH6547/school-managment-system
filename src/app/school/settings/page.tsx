@@ -13,7 +13,16 @@ export default async function SchoolSettingsPage() {
   const orgId = session?.organizationId!;
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
-    select: { name: true, logo: true, website: true, address: true, phone: true, email: true },
+    select: {
+      name: true,
+      logo: true,
+      website: true,
+      address: true,
+      phone: true,
+      email: true,
+      pdfAccentColor: true,
+      dashboardTheme: true,
+    },
   });
   if (!org) return null;
 

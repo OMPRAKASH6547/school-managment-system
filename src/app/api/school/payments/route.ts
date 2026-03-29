@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const branchId = await resolveBranchIdForOrganization(session.organizationId!, await getSelectedBranchId());
 
     /** Student/fee rows may have branchId null (legacy); allow current branch OR unassigned in same org. */
-    const branchScope = { OR: [{ branchId }, { branchId: null }] as const };
+    const branchScope = { OR: [{ branchId }, { branchId: null }] };
 
     let studentForBranch: { id: string; branchId: string | null } | null = null;
     let staffForBranch: { id: string; branchId: string | null } | null = null;

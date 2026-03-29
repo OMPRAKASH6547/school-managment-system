@@ -49,7 +49,7 @@ const MODULES: { key: ModuleKey; label: string }[] = [
 /** Subjects configured on the class (comma-separated). */
 function parseClassSubjectsCsv(text: string | null | undefined): string[] {
   if (!text?.trim()) return [];
-  return [...new Set(text.split(",").map((s) => s.trim()).filter(Boolean))];
+  return Array.from(new Set(text.split(",").map((s) => s.trim()).filter(Boolean)));
 }
 
 function blankAccess(): ModuleAccessMap {

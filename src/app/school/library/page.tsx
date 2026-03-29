@@ -19,7 +19,7 @@ export default async function LibraryPage() {
     where: { status: "issued", bookId: { in: books.map((b) => b.id) } },
     select: { bookId: true, studentId: true },
   });
-  const studentIds = [...new Set(activeIssues.map((i) => i.studentId).filter(Boolean))] as string[];
+  const studentIds = Array.from(new Set(activeIssues.map((i) => i.studentId).filter(Boolean))) as string[];
   const students = studentIds.length
     ? await prisma.student.findMany({
         where: { id: { in: studentIds } },

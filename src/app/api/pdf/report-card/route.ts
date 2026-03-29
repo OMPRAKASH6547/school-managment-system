@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { prisma } from "@/lib/db";
 import { generateReportCardBuffer } from "@/lib/pdf/generateReportCard";
 import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
+import { pdfBytesAsResponseBody } from "@/lib/pdf/pdfBytesAsResponseBody";
 import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 
 const subjectSchema = z.object({
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
       loadImageDataUriForPdf(body.studentImage),
     ]);
 
-    const pdfOutput = await generateReportCardBuffer({
+    const pdfOutputUnknown: unknown = await generateReportCardBuffer({
       schoolName: body.schoolName,
       schoolLogoUrl,
       schoolAddress: body.schoolAddress ?? null,
@@ -103,17 +104,17 @@ export async function POST(req: NextRequest) {
       pdfTheme,
     });
     const pdfBytes =
-      pdfOutput instanceof Uint8Array
-        ? pdfOutput
-        : pdfOutput instanceof ArrayBuffer
-        ? new Uint8Array(pdfOutput)
-        : new Uint8Array(Buffer.from(pdfOutput as unknown as ArrayBuffer));
+      pdfOutputUnknown instanceof Uint8Array
+        ? pdfOutputUnknown
+        : pdfOutputUnknown instanceof ArrayBuffer
+        ? new Uint8Array(pdfOutputUnknown)
+        : new Uint8Array(Buffer.from(pdfOutputUnknown as ArrayBuffer));
 
     const studentNameSafe = body.studentName.trim().replace(/\s+/g, "-");
     const receiptDate = new Date().toISOString().slice(0, 10);
     const filename = `${studentNameSafe}_marksheet_${receiptDate}.pdf`;
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(pdfBytesAsResponseBody(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,

@@ -45,7 +45,7 @@ export function DashboardFilters({
       const s = c.section?.trim();
       if (s) set.add(s);
     }
-    return [...set].sort().map((s) => ({ value: s, label: s }));
+    return Array.from(set).sort().map((s) => ({ value: s, label: s }));
   }, [classes]);
 
   return (

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createInvoiceDocument } from "@/lib/pdf/BookInvoice";
 import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
+import { pdfBytesAsResponseBody } from "@/lib/pdf/pdfBytesAsResponseBody";
 import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 import { requirePermission } from "@/lib/permissions";
 
@@ -80,7 +81,7 @@ export async function GET(
     const dateStr = new Date(sale.soldAt ?? new Date()).toISOString().slice(0, 10);
     const filename = `Book-Invoice-${invoiceNo}-${dateStr}.pdf`;
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(pdfBytesAsResponseBody(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,

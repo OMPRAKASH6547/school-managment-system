@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
     const orgId = session.organizationId!;
     const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
-    const branchScope = { OR: [{ branchId }, { branchId: null }] as const };
+    const branchScope = { OR: [{ branchId }, { branchId: null }] };
 
     const rollNo = req.nextUrl.searchParams.get("rollNo")?.trim() ?? "";
     if (!rollNo) {

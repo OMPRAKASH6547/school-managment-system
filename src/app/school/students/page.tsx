@@ -69,7 +69,8 @@ export default async function SchoolStudentsPage({
     : [];
   const latestAdmissionByStudent = new Map<string, (typeof admissionPayments)[number]>();
   for (const p of admissionPayments) {
-    if (!latestAdmissionByStudent.has(p.studentId)) latestAdmissionByStudent.set(p.studentId, p);
+    const sid = p.studentId;
+    if (sid && !latestAdmissionByStudent.has(sid)) latestAdmissionByStudent.set(sid, p);
   }
 
   const creatorIds = students.map((s) => s.createdBy).filter((v): v is string => Boolean(v));

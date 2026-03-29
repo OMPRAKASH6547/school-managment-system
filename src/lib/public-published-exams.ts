@@ -22,7 +22,9 @@ export function publishedExamWhereForStudent(opts: {
     };
   }
 
-  const scopeIds = [...new Set([studentBranchId, classBranchId].filter((x): x is string => !!x))];
+  const scopeIds = Array.from(
+    new Set([studentBranchId, classBranchId].filter((x): x is string => !!x))
+  );
 
   const base: Prisma.ExamWhereInput = {
     organizationId,

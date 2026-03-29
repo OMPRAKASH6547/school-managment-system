@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { createFeeCardDocument } from "@/lib/pdf/FeeCard";
 import { loadImageDataUriForPdf } from "@/lib/pdf/loadImageForPdf";
+import { pdfBytesAsResponseBody } from "@/lib/pdf/pdfBytesAsResponseBody";
 import { pdfThemeFromAccent } from "@/lib/pdf/pdfTheme";
 import { requirePermission } from "@/lib/permissions";
 import { parsePaymentLineItems } from "@/lib/payment-line-items";
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const orgId = session.organizationId!;
     const branchId = await resolveBranchIdForOrganization(orgId, await getSelectedBranchId());
-    const branchScope = { OR: [{ branchId }, { branchId: null }] as const };
+    const branchScope = { OR: [{ branchId }, { branchId: null }] };
 
     const payment = await prisma.payment.findFirst({
       where: { id: body.paymentId, organizationId: orgId, ...branchScope },
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest) {
         ? await nodeStreamToUint8Array(pdfOutput)
         : new Uint8Array(Buffer.from(pdfOutput as unknown as ArrayBuffer));
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(pdfBytesAsResponseBody(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
