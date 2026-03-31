@@ -53,8 +53,8 @@ After running `npm run db:seed`, use these credentials to log in as Super Admin:
 
 | Field    | Value                          |
 |----------|---------------------------------|
-| **Email**    | `superadmin@schoolsaas.com` |
-| **Password** | `admin123`                  |
+| **Email**    | `superadmin1@schoolsaas.com` |
+| **Password** | `admin12323`                  |
 
 Log in at `/login` → you will be redirected to `/super-admin` to approve organizations and assign plans.
 
