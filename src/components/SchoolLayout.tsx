@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchablePaginatedSelect } from "@/app/components/SearchablePaginatedSelect";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
 import { canPermission, type PermissionModule } from "@/lib/permissions";
 import type { UserRole } from "@/types";
 
@@ -262,6 +263,14 @@ export function SchoolLayout({
             <span className="text-lg font-bold text-school-navy max-w-[200px] truncate lg:max-w-none">
               {schoolName}
             </span>
+            {(role === "school_admin" || role === "admin") && (
+              <Link
+                href="/school/settings#branches"
+                className="text-xs font-medium text-primary-600 hover:underline lg:hidden"
+              >
+                Branches
+              </Link>
+            )}
 
             {branches.length > 0 && (
               <div className="hidden min-w-0 flex-wrap items-center gap-2 lg:flex">
@@ -471,7 +480,10 @@ export function SchoolLayout({
 
         {/* Main content */}
         <main className={`min-w-0 flex-1 ${menuCollapsed ? "lg:pl-20" : "lg:pl-64"}`}>
-          <div className="p-4 lg:p-6">{children}</div>
+          <div className="min-w-0 max-w-full p-4 lg:p-6">
+            <PageBreadcrumbs />
+            <div className="min-w-0 max-w-full overflow-x-auto">{children}</div>
+          </div>
         </main>
       </div>
     </div>

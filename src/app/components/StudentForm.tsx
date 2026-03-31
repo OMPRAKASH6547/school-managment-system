@@ -255,7 +255,7 @@ export function StudentForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700">Aadhaar no *</label>
+          <label className="block text-sm font-medium text-slate-700">Aadhaar no (optional)</label>
           <input
             value={form.aadhaarNo}
             onChange={(e) => setForm((f) => ({ ...f, aadhaarNo: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
@@ -263,9 +263,8 @@ export function StudentForm({
             inputMode="numeric"
             autoComplete="off"
             maxLength={12}
-            pattern="\d{12}"
-            title="12-digit Aadhaar"
-            required
+            pattern="\d{0,12}"
+            title="Optional: 12-digit Aadhaar"
           />
         </div>
       </div>

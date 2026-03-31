@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   firstZodIssueMessage,
@@ -35,6 +36,10 @@ function slugify(s: string): string {
 
 function genCode(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+}
+
+function defaultBranchCodeForOrg(orgId: string): string {
+  return `BR-${orgId}`.toUpperCase();
 }
 
 export async function POST(req: NextRequest) {
@@ -94,6 +99,23 @@ export async function POST(req: NextRequest) {
         phone: data.phone ?? null,
       },
     });
+
+    try {
+      await prisma.branch.create({
+        data: {
+          organizationId: org.id,
+          name: "Main Branch",
+          branchCode: defaultBranchCodeForOrg(org.id),
+          address: null,
+          contact: null,
+        },
+      });
+    } catch (error) {
+      // If client retries the same request, ignore duplicate default-branch code.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+        throw error;
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {

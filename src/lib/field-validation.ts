@@ -102,6 +102,12 @@ function digitsOnly(v: unknown): unknown {
 
 export const zAadhaar = z.preprocess(digitsOnly, z.string().regex(/^\d{12}$/, "Aadhaar must be exactly 12 digits"));
 
+/** Empty or exactly 12 digits — use for optional Aadhaar on forms. */
+export const zAadhaarOpt = z.preprocess(
+  (v) => (v === undefined || v === null || v === "" ? "" : digitsOnly(v)),
+  z.union([z.literal(""), z.string().regex(/^\d{12}$/, "Aadhaar must be exactly 12 digits")]),
+).transform((s) => (s === "" ? undefined : s));
+
 export const zPinOpt = z
   .preprocess((v) => (typeof v === "string" ? v.replace(/\D/g, "") : ""), z.union([z.literal(""), z.string().max(8)]))
   .superRefine((val, ctx) => {

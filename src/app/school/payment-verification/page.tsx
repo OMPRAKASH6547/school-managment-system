@@ -107,6 +107,7 @@ export default async function PaymentVerificationPage({
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Payer</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Fee month</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Method</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Collected by</th>
@@ -125,6 +126,7 @@ export default async function PaymentVerificationPage({
                   </td>
                   <td className="px-6 py-4 text-slate-600 capitalize">{p.payerType}</td>
                   <td className="px-6 py-4 text-slate-600">₹{p.amount}</td>
+                  <td className="px-6 py-4 text-slate-600">{(p as { feePeriodMonth?: string | null }).feePeriodMonth ?? "—"}</td>
                   <td className="px-6 py-4 text-slate-600">{new Date(p.paidAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4 text-slate-600">{p.method}</td>
                   <td className="px-6 py-4 text-slate-600">

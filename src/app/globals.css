@@ -64,6 +64,13 @@ body {
   .btn-loading {
     @apply relative overflow-hidden text-transparent;
   }
+  /* Horizontal scroll for data tables on small screens */
+  .table-responsive {
+    @apply -mx-4 max-w-[100vw] overflow-x-auto px-4 sm:mx-0 sm:max-w-none sm:overflow-visible sm:px-0;
+  }
+  .table-responsive table {
+    @apply min-w-[640px] sm:min-w-0;
+  }
   .btn-loading::after {
     content: "";
     position: absolute;

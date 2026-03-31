@@ -27,6 +27,7 @@ export function createFeeCardDocument({
     reference: string | null;
     status: string;
     verifiedAt: Date | null;
+    feePeriodMonth?: string | null;
     /** Fee breakdown; falls back to single total if empty. */
     lineItems: { label: string; amount: number }[];
   };
@@ -192,6 +193,9 @@ export function createFeeCardDocument({
             {payer.firstName} {payer.lastName}
           </Text>
           <Text style={styles.muted}>{payer.type === "student" ? "Roll No" : "Employee ID"}: {payer.code ?? "-"}</Text>
+          {payment.feePeriodMonth ? (
+            <Text style={[styles.muted, { marginTop: 4 }]}>Fee month: {payment.feePeriodMonth}</Text>
+          ) : null}
         </View>
 
         <View style={styles.table}>

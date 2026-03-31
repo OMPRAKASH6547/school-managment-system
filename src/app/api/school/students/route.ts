@@ -9,7 +9,7 @@ import {
   firstZodIssueMessage,
   LIMITS,
   zAdmissionLineItems,
-  zAadhaar,
+  zAadhaarOpt,
   zBloodGroup,
   zCuidId,
   zEmailOpt,
@@ -23,7 +23,7 @@ import {
 
 const bodySchema = z.object({
   organizationId: zCuidId,
-  aadhaarNo: zAadhaar,
+  aadhaarNo: zAadhaarOpt,
   bloodGroup: zBloodGroup,
   firstName: zPersonName,
   lastName: zPersonName,
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       return `${nowYY}${dobYY}${String(Date.now()).slice(-4)}`;
     };
 
-    const aadhaarNo = data.aadhaarNo;
+    const aadhaarNo = data.aadhaarNo ?? null;
     const bloodGroup = data.bloodGroup;
 
     const rollNo = await generateUniqueRollNo({
@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
         <p>New student admission created.</p>
         <p><strong>Student:</strong> ${data.firstName} ${data.lastName}</p>
         <p><strong>Roll:</strong> ${rollNo ?? "-"}</p>
-        <p><strong>Aadhaar:</strong> ${aadhaarNo}</p>
+        <p><strong>Aadhaar:</strong> ${aadhaarNo ?? "—"}</p>
         <p><strong>Blood Group:</strong> ${bloodGroup}</p>
         <p><strong>Created By:</strong> ${creator?.name ?? "-"}</p>
         <p><strong>Admission Fee:</strong> ${admissionAmount > 0 ? `INR ${admissionAmount}` : "Not recorded"}</p>

@@ -106,6 +106,26 @@ model SubscriptionPlan {
   updatedAt   DateTime @updatedAt
 
   subscriptions Subscription[]
+  inquiries     SubscriptionInquiry[]
+}
+
+// Public leads: demo requests & PayU payment attempts (home page).
+model SubscriptionInquiry {
+  id             String   @id @default(cuid()) @map("_id")
+  planId         String
+  email          String
+  name           String?
+  phone          String?
+  schoolName     String?
+  source         String   // demo | payu
+  amountSnapshot Float?
+  payuTxnId      String?  @unique
+  payuStatus     String?  // success | failure | pending
+  payuMihpayId   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 }
 
 model Subscription {
@@ -249,6 +269,7 @@ model Payment {
   // Breakdown for receipts: [{ "label": "Tuition", "amount": 5000, "feePlanId": "..." | null }]
   lineItems      Json?
   notes          String?
+  feePeriodMonth String? // YYYY-MM — which month this fee is for
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

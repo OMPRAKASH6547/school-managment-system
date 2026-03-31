@@ -26,6 +26,8 @@ const bodySchema = z
     reference: zOptionalStr(LIMITS.reference),
     feePlanId: z.preprocess((v) => (v === "" ? null : v), z.union([z.null(), zCuidId])).optional(),
     notes: zOptionalStr(LIMITS.notesMax),
+    feePeriodMonth: z
+      .preprocess((v) => (v === undefined || v === null || v === "" ? undefined : String(v).trim()), z.string().regex(/^\d{4}-\d{2}$/, "Use YYYY-MM for fee month").optional()),
     lineItems: zRecordLineItems.optional(),
   })
   .refine((d) => (d.lineItems && d.lineItems.length > 0) || (d.amount != null && d.amount > 0), {
@@ -160,6 +162,7 @@ export async function POST(req: NextRequest) {
         feePlanId: primaryFeePlanId,
         lineItems: storedLineItems ?? undefined,
         notes: data.notes ?? null,
+        feePeriodMonth: data.feePeriodMonth ?? null,
         status: "pending", // receipt downloadable only after admin verifies
       },
       select: { id: true, amount: true, method: true, paidAt: true },
@@ -197,6 +200,7 @@ export async function POST(req: NextRequest) {
         <p><strong>Amount:</strong> INR ${createdPayment.amount}</p>
         <p><strong>Mode:</strong> ${createdPayment.method}</p>
         <p><strong>Date:</strong> ${new Date(createdPayment.paidAt).toLocaleDateString()}</p>
+        ${data.feePeriodMonth ? `<p><strong>Fee month:</strong> ${data.feePeriodMonth}</p>` : ""}
         <p><strong>Status:</strong> Pending verification</p>
       `,
     });

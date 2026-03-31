@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AppLogo } from "@/components/AppLogo";
+import { PageBreadcrumbs } from "@/components/PageBreadcrumbs";
 
 interface NavItem {
   href: string;
@@ -75,8 +76,9 @@ export function DashboardLayout({ children, title, nav, role }: DashboardLayoutP
       </header>
 
       <main className="mx-auto max-w-7xl px-2 py-4 sm:px-4 sm:py-8 md:px-6 lg:px-8">
-        {title && <h1 className="text-xl sm:text-2xl font-bold text-slate-900">{title}</h1>}
-        <div className={title ? "mt-4 sm:mt-6" : ""}>{children}</div>
+        <PageBreadcrumbs />
+        {title && <h1 className="mt-2 text-xl sm:text-2xl font-bold text-slate-900">{title}</h1>}
+        <div className={`min-w-0 max-w-full overflow-x-auto ${title ? "mt-4 sm:mt-6" : ""}`}>{children}</div>
       </main>
     </div>
   );

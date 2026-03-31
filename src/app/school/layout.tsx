@@ -38,6 +38,10 @@ function DatabaseUnavailableScreen() {
   );
 }
 
+function defaultBranchCodeForOrg(orgId: string): string {
+  return `BR-${orgId}`.toUpperCase();
+}
+
 export default async function SchoolLayoutWrapper({
   children,
 }: {
@@ -108,25 +112,23 @@ export default async function SchoolLayoutWrapper({
         });
       }
 
-      const generateBranchCode = async (): Promise<string> => {
-        for (let attempt = 0; attempt < 10; attempt++) {
-          const code = `BR-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-          const exists = await prisma.branch.findUnique({ where: { branchCode: code } });
-          if (!exists) return code;
+      const branchCode = defaultBranchCodeForOrg(org.id);
+      try {
+        await prisma.branch.create({
+          data: {
+            organizationId: org.id,
+            name: "Main Branch",
+            branchCode,
+            address: null,
+            contact: null,
+          },
+        });
+      } catch (error) {
+        // Parallel requests can race here; duplicate branchCode means branch already created.
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+          throw error;
         }
-        return `BR-${Date.now()}`;
-      };
-
-      const branchCode = await generateBranchCode();
-      await prisma.branch.create({
-        data: {
-          organizationId: org.id,
-          name: "Main Branch",
-          branchCode,
-          address: null,
-          contact: null,
-        },
-      });
+      }
 
       branches = await prisma.branch.findMany({
         where: { organizationId: org.id },

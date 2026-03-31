@@ -7,7 +7,7 @@ import { randomBytes } from "crypto";
 import {
   firstZodIssueMessage,
   LIMITS,
-  zAadhaar,
+  zAadhaarOpt,
   zBloodGroup,
   zCuidId,
   zEmailOpt,
@@ -19,7 +19,7 @@ import {
 } from "@/lib/field-validation";
 
 const bodySchema = z.object({
-  aadhaarNo: zAadhaar,
+  aadhaarNo: zAadhaarOpt,
   bloodGroup: zBloodGroup,
   firstName: zPersonName,
   lastName: zPersonName,
@@ -110,7 +110,7 @@ export async function POST(
       where: { id },
       data: {
         rollNo,
-        aadhaarNo: data.aadhaarNo,
+        aadhaarNo: data.aadhaarNo ?? null,
         bloodGroup: data.bloodGroup,
         resultToken,
         firstName: data.firstName,

@@ -40,12 +40,14 @@ export function RecordPaymentForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const defaultMonth = () => new Date().toISOString().slice(0, 7);
   const [form, setForm] = useState({
     payerType: initialPayerType,
     studentId: "",
     staffId: "",
     rollNo: "",
     employeeId: "",
+    feePeriodMonth: defaultMonth(),
     method: "cash",
     reference: "",
     notes: "",
@@ -148,6 +150,7 @@ export function RecordPaymentForm({
           method: form.method,
           reference: form.reference || null,
           notes: form.notes || null,
+          feePeriodMonth: form.feePeriodMonth || null,
         }),
       });
       const data = await res.json();
@@ -161,6 +164,7 @@ export function RecordPaymentForm({
         staffId: "",
         rollNo: "",
         employeeId: "",
+        feePeriodMonth: defaultMonth(),
         method: "cash",
         reference: "",
         notes: "",
@@ -261,6 +265,17 @@ export function RecordPaymentForm({
           </div>
         </>
       )}
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Fee for month *</label>
+        <input
+          type="month"
+          value={form.feePeriodMonth}
+          onChange={(e) => setForm((f) => ({ ...f, feePeriodMonth: e.target.value }))}
+          className="input-field mt-1 max-w-[240px]"
+          required
+        />
+        <p className="mt-1 text-xs text-slate-500">Which month this payment applies to (tuition, etc.).</p>
+      </div>
       <div>
         <label className="block text-sm font-medium text-slate-700">Method *</label>
         <SearchablePaginatedSelect

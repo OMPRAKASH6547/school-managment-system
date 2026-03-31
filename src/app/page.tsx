@@ -1,9 +1,23 @@
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
+import { PricingPlansSection } from "@/app/components/PricingPlansSection";
 import { AppLogo } from "@/components/AppLogo";
+import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const session = await getSession();
+  let plans: Awaited<ReturnType<typeof prisma.subscriptionPlan.findMany>> = [];
+  try {
+    plans = await prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { price: "asc" },
+      select: { id: true, name: true, slug: true, description: true, price: true, maxStudents: true, maxStaff: true },
+    });
+  } catch {
+    plans = [];
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-primary-900 to-slate-900 text-white">
@@ -68,7 +82,7 @@ export default async function HomePage() {
           )}
         </div>
 
-        <div className="mt-24 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { title: "Subscription plans", desc: "Choose a plan that fits your size. Scale as you grow." },
             { title: "Super Admin approval", desc: "We verify every school. After approval, full access." },
@@ -80,6 +94,8 @@ export default async function HomePage() {
             </div>
           ))}
         </div>
+
+        <PricingPlansSection plans={plans} />
       </main>
     </div>
   );
