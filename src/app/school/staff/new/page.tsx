@@ -13,11 +13,17 @@ export default async function NewStaffPage() {
     orderBy: { createdAt: "desc" },
   });
   const sorted = [...branches].sort((a, b) => (a.id === branchId ? -1 : b.id === branchId ? 1 : 0));
-  const classes = await prisma.class.findMany({
-    where: { organizationId: orgId, status: "active" },
-    select: { id: true, name: true, branchId: true, subjects: true },
-    orderBy: { name: "asc" },
-  });
+  const [classes, org] = await Promise.all([
+    prisma.class.findMany({
+      where: { organizationId: orgId, status: "active" },
+      select: { id: true, name: true, branchId: true, subjects: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { type: true },
+    }),
+  ]);
 
   return (
     <>
@@ -26,7 +32,12 @@ export default async function NewStaffPage() {
       </div>
       <h1 className="text-2xl font-bold text-slate-900">Add staff</h1>
       <div className="mt-6 card max-w-xl">
-        <StaffForm branches={sorted} classes={classes} initialTeacherClassSubjects={{}} />
+        <StaffForm
+          branches={sorted}
+          classes={classes}
+          initialTeacherClassSubjects={{}}
+          schoolType={org?.type ?? null}
+        />
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
-import { PricingPlansSection } from "@/app/components/PricingPlansSection";
+import { PricingPlansSection, type PublicPlan } from "@/app/components/PricingPlansSection";
 import { AppLogo } from "@/components/AppLogo";
 import { prisma } from "@/lib/db";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const session = await getSession();
-  let plans: Awaited<ReturnType<typeof prisma.subscriptionPlan.findMany>> = [];
+  let plans: PublicPlan[] = [];
   try {
     plans = await prisma.subscriptionPlan.findMany({
       where: { isActive: true },

@@ -154,6 +154,7 @@ export default async function SchoolLayoutWrapper({
         selectedBranchId={selectedBranchId}
         needsBranchCookie={needsBranchCookie}
         dashboardTheme={org.dashboardTheme ?? "slate"}
+        schoolType={org.type}
       >
         {children}
       </SchoolLayout>

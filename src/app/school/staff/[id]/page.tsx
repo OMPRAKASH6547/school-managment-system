@@ -29,7 +29,7 @@ export default async function EditStaffPage({
     select: { permissionsJson: true },
   });
   let initialModuleAccess: Record<string, { view?: boolean; add?: boolean; edit?: boolean; delete?: boolean }> | null = null;
-  const [classes, assignments] = await Promise.all([
+  const [classes, assignments, org] = await Promise.all([
     prisma.class.findMany({
       where: { organizationId: orgId, status: "active" },
       orderBy: { name: "asc" },
@@ -42,6 +42,10 @@ export default async function EditStaffPage({
         teacherStaffId: staff.id,
       },
       select: { classId: true, subjects: true },
+    }),
+    prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { type: true },
     }),
   ]);
 
@@ -70,6 +74,7 @@ export default async function EditStaffPage({
             assignments.map((a) => [a.classId, (a.subjects ?? "").trim()])
           )}
           initialGeneratedLoginPassword={(staff as any).generatedLoginPassword ?? null}
+          schoolType={org?.type ?? null}
         />
       </div>
     </>

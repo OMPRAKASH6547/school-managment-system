@@ -42,6 +42,8 @@ interface SchoolLayoutProps {
   needsBranchCookie?: boolean;
   /** School setting: slate | navy | emerald | indigo | rose */
   dashboardTheme?: string | null;
+  /** Organization type: school | coaching */
+  schoolType?: string | null;
 }
 
 const navItems: NavItem[] = [
@@ -93,14 +95,50 @@ export function SchoolLayout({
   selectedBranchId,
   needsBranchCookie = false,
   dashboardTheme = null,
+  schoolType = null,
 }: SchoolLayoutProps) {
+  const isCoaching = (schoolType ?? "").toLowerCase() === "coaching";
   const sidebarShell = dashboardSidebarShell(dashboardTheme);
   const dashboardHref = role === "teacher" ? "/school/teacher" : role === "staff" ? "/school/staff-attendance" : "/school";
+  const coachingLabelsByHref: Record<string, string> = {
+    "/school": "Coaching Dashboard",
+    "/school/students": "Student Management",
+    "/school/staff": "Teacher Management",
+    "/school/classes": "Batch Management",
+    "/school/examinations": "Exams / Test Series",
+    "/school/attendance": "Attendance",
+    "/school/teacher": "Live Class Control",
+    "/school/fees": "Fee Management",
+    "/school/payment-verification": "Fee Verification",
+    "/school/books": "Material Management",
+  };
+  const coachingAllowedHrefs = new Set<string>([
+    "/school",
+    "/school/students",
+    "/school/staff",
+    "/school/classes",
+    "/school/examinations",
+    "/school/attendance",
+    "/school/teacher",
+    "/school/staff-attendance",
+    "/school/fees",
+    "/school/payment-verification",
+    "/school/books",
+    "/school/settings",
+  ]);
   const displayNavItems = navItems
-    .map((item) => (item.href === "/school" ? { ...item, href: dashboardHref, label: "Dashboard" } : item))
+    .map((item) => {
+      const withDashboardHref = item.href === "/school" ? { ...item, href: dashboardHref } : item;
+      if (!isCoaching) return withDashboardHref;
+      return {
+        ...withDashboardHref,
+        label: coachingLabelsByHref[withDashboardHref.href] ?? withDashboardHref.label,
+      };
+    })
     .filter((item) => {
       if (role === "teacher") return item.href !== "/school/staff-attendance";
       if (role === "staff") return item.href !== "/school/teacher";
+      if (isCoaching && !coachingAllowedHrefs.has(item.href)) return false;
       return true;
     });
 

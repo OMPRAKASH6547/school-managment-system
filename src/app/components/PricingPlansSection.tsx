@@ -20,7 +20,10 @@ export function PricingPlansSection({ plans }: { plans: PublicPlan[] }) {
   function field(planId: string, key: keyof (typeof forms)[string], value: string) {
     setForms((prev) => ({
       ...prev,
-      [planId]: { email: "", name: "", phone: "", schoolName: "", ...prev[planId], [key]: value },
+      [planId]: {
+        ...(prev[planId] ?? { email: "", name: "", phone: "", schoolName: "" }),
+        [key]: value,
+      },
     }));
   }
 

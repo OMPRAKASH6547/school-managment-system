@@ -41,6 +41,8 @@ const bodySchema = z.object({
   ).optional(),
 });
 
+const NON_COACHING_MODULES = ["library", "transport", "hostel"] as const;
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
@@ -85,8 +87,20 @@ export async function POST(req: NextRequest) {
     const plainPassword = randomBytes(8).toString("base64url");
     const passwordHash = await hashPassword(plainPassword);
 
+    const org = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { type: true },
+    });
+    const isCoaching = (org?.type ?? "").toLowerCase() === "coaching";
+    const sanitizedModuleAccess = data.moduleAccess ? { ...data.moduleAccess } : undefined;
+    if (isCoaching && sanitizedModuleAccess) {
+      for (const moduleKey of NON_COACHING_MODULES) {
+        sanitizedModuleAccess[moduleKey] = { view: false, add: false, edit: false, delete: false };
+      }
+    }
+
     const userRole = data.role;
-    const permissionsJson = data.moduleAccess ? JSON.stringify(data.moduleAccess) : null;
+    const permissionsJson = sanitizedModuleAccess ? JSON.stringify(sanitizedModuleAccess) : null;
 
     await prisma.user.create({
       data: {

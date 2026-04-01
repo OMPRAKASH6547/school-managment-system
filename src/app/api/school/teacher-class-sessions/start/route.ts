@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const bodySchema = z.object({
   classId: z.string().min(1),
+  autoMarkAttendance: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -58,6 +59,30 @@ export async function POST(req: NextRequest) {
         classId: body.classId,
       },
     });
+
+    if (body.autoMarkAttendance) {
+      const attendanceDate = new Date();
+      attendanceDate.setHours(0, 0, 0, 0);
+      const students = await prisma.student.findMany({
+        where: { organizationId: orgId, branchId, classId: body.classId, status: "active" },
+        select: { id: true },
+      });
+      for (const student of students) {
+        await prisma.attendance.upsert({
+          where: {
+            studentId_date: { studentId: student.id, date: attendanceDate },
+          },
+          create: {
+            organizationId: orgId,
+            branchId,
+            studentId: student.id,
+            date: attendanceDate,
+            status: "present",
+          },
+          update: {},
+        });
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {

@@ -8,14 +8,21 @@ const PANELS: { id: string; label: string }[] = [
   { id: "kpis", label: "KPIs" },
   { id: "attendance", label: "Attendance" },
   { id: "charts", label: "Charts" },
+  { id: "collections", label: "Collections" },
   { id: "sessions", label: "Class sessions" },
   { id: "pending", label: "Pending payments" },
 ];
 
-export function DashboardPanelNav() {
+export function DashboardPanelNav({ isCoaching = false }: { isCoaching?: boolean }) {
   const sp = useSearchParams();
   const raw = sp.get("panel");
   const current = raw && PANELS.some((p) => p.id === raw) ? raw : "all";
+  const labelsById = isCoaching
+    ? {
+        sessions: "Daily Class Tracking",
+        pending: "Fee Reminders",
+      }
+    : {};
 
   function href(panelId: string) {
     const p = new URLSearchParams(sp.toString());
@@ -36,6 +43,7 @@ export function DashboardPanelNav() {
       <div className="flex flex-wrap gap-2">
         {PANELS.map(({ id, label }) => {
           const active = id === current;
+          const viewLabel = labelsById[id as keyof typeof labelsById] ?? label;
           return (
             <Link
               key={id}
@@ -47,7 +55,7 @@ export function DashboardPanelNav() {
                   : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
               }`}
             >
-              {label}
+              {viewLabel}
             </Link>
           );
         })}

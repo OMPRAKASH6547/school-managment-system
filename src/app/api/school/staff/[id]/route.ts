@@ -40,6 +40,8 @@ const bodySchema = z.object({
   ).optional(),
 });
 
+const NON_COACHING_MODULES = ["library", "transport", "hostel"] as const;
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -159,8 +161,20 @@ export async function POST(
     }
 
     // Keep login role in sync with staff role.
+    const org = await prisma.organization.findUnique({
+      where: { id: session.organizationId! },
+      select: { type: true },
+    });
+    const isCoaching = (org?.type ?? "").toLowerCase() === "coaching";
+    const sanitizedModuleAccess = data.moduleAccess ? { ...data.moduleAccess } : undefined;
+    if (isCoaching && sanitizedModuleAccess) {
+      for (const moduleKey of NON_COACHING_MODULES) {
+        sanitizedModuleAccess[moduleKey] = { view: false, add: false, edit: false, delete: false };
+      }
+    }
+
     const userRole = data.role;
-    const permissionsJson = data.moduleAccess ? JSON.stringify(data.moduleAccess) : null;
+    const permissionsJson = sanitizedModuleAccess ? JSON.stringify(sanitizedModuleAccess) : null;
     await prisma.user.updateMany({
       where: { email: data.email, organizationId: session.organizationId!, isActive: true },
       data: {

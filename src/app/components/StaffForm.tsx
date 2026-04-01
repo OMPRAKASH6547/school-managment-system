@@ -46,6 +46,16 @@ const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "hostel", label: "Hostel" },
 ];
 
+const COACHING_MODULE_KEYS = new Set<ModuleKey>([
+  "students",
+  "staff",
+  "classes",
+  "attendance",
+  "examinations",
+  "fees",
+  "books",
+]);
+
 /** Subjects configured on the class (comma-separated). */
 function parseClassSubjectsCsv(text: string | null | undefined): string[] {
   if (!text?.trim()) return [];
@@ -67,26 +77,35 @@ function blankAccess(): ModuleAccessMap {
   };
 }
 
-function defaultAccessByRole(role: string): ModuleAccessMap {
+function defaultAccessByRole(role: string, isCoaching: boolean): ModuleAccessMap {
   const all = blankAccess();
+  const effectiveModules = isCoaching
+    ? MODULES.filter((m) => COACHING_MODULE_KEYS.has(m.key))
+    : MODULES;
   const setAll = () => {
-    for (const m of MODULES) all[m.key] = { view: true, add: true, edit: true, delete: true };
+    for (const m of effectiveModules) all[m.key] = { view: true, add: true, edit: true, delete: true };
   };
   if (role === "admin" || role === "school_admin") setAll();
   if (role === "teacher") {
     all.attendance = { view: true, add: true, edit: true, delete: false };
     all.examinations = { view: true, add: true, edit: true, delete: false };
     all.books = { view: true, add: true, edit: false, delete: false };
-    all.transport = { view: true, add: true, edit: false, delete: false };
+    if (!isCoaching) {
+      all.transport = { view: true, add: true, edit: false, delete: false };
+    }
   }
   if (role === "accountant") {
     all.fees = { view: true, add: true, edit: true, delete: false };
-    all.books = { view: true, add: true, edit: true, delete: false };
+    if (!isCoaching) {
+      all.books = { view: true, add: true, edit: true, delete: false };
+    }
   }
   if (role === "staff") {
     all.attendance = { view: true, add: true, edit: false, delete: false };
-    all.books = { view: true, add: true, edit: false, delete: false };
-    all.transport = { view: true, add: true, edit: false, delete: false };
+    if (!isCoaching) {
+      all.books = { view: true, add: true, edit: false, delete: false };
+      all.transport = { view: true, add: true, edit: false, delete: false };
+    }
   }
   return all;
 }
@@ -220,6 +239,7 @@ export function StaffForm({
   initialTeacherClassIds = [],
   initialTeacherClassSubjects = {},
   initialGeneratedLoginPassword = null,
+  schoolType = null,
 }: {
   staff?: Staff | null;
   branches?: { id: string; name: string; branchCode: string }[];
@@ -228,7 +248,9 @@ export function StaffForm({
   initialTeacherClassIds?: string[];
   initialTeacherClassSubjects?: Record<string, string>;
   initialGeneratedLoginPassword?: string | null;
+  schoolType?: string | null;
 }) {
+  const isCoaching = (schoolType ?? "").toLowerCase() === "coaching";
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -248,7 +270,7 @@ export function StaffForm({
   const [moduleAccess, setModuleAccess] = useState<ModuleAccessMap>(
     initialModuleAccess
       ? ({ ...blankAccess(), ...initialModuleAccess } as ModuleAccessMap)
-      : defaultAccessByRole(staff?.role ?? "teacher")
+      : defaultAccessByRole(staff?.role ?? "teacher", isCoaching)
   );
   const [teacherClassIds, setTeacherClassIds] = useState<string[]>(initialTeacherClassIds);
   const [teacherClassSubjects, setTeacherClassSubjects] = useState<Record<string, string[]>>(() => {
@@ -298,11 +320,22 @@ export function StaffForm({
   );
 
   const url = staff ? `/api/school/staff/${staff.id}` : "/api/school/staff";
+  const visibleModules = isCoaching
+    ? MODULES.filter((m) => COACHING_MODULE_KEYS.has(m.key))
+    : MODULES;
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
+      const sanitizedModuleAccess = { ...moduleAccess };
+      if (isCoaching) {
+        for (const moduleItem of MODULES) {
+          if (!COACHING_MODULE_KEYS.has(moduleItem.key)) {
+            sanitizedModuleAccess[moduleItem.key] = { view: false, add: false, edit: false, delete: false };
+          }
+        }
+      }
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,7 +343,7 @@ export function StaffForm({
           ...form,
           salary: form.salary === "" ? null : Number(form.salary),
           joinDate: form.joinDate || null,
-          moduleAccess,
+          moduleAccess: sanitizedModuleAccess,
           classIds: form.role === "teacher" ? teacherClassIds : [],
           classSubjects:
             form.role === "teacher"
@@ -459,7 +492,10 @@ export function StaffForm({
       )}
       <div className="rounded-lg border border-slate-200 p-3">
         <p className="text-sm font-medium text-slate-800">Module permissions</p>
-        <p className="mt-1 text-xs text-slate-500">Select View/Add/Edit/Delete access by module.</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Select View/Add/Edit/Delete access by module.
+          {isCoaching ? " Coaching-only modules are shown." : ""}
+        </p>
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead>
@@ -472,7 +508,7 @@ export function StaffForm({
               </tr>
             </thead>
             <tbody>
-              {MODULES.map((m) => (
+              {visibleModules.map((m) => (
                 <tr key={m.key} className="border-t border-slate-100">
                   <td className="py-2 pr-4 font-medium text-slate-700">{m.label}</td>
                   {(["view", "add", "edit", "delete"] as const).map((k) => (

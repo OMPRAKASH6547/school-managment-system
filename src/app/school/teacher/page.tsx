@@ -33,9 +33,12 @@ export default async function TeacherDashboardPage() {
 
   const assigned = await prisma.teacherAssignment.findMany({
     where: { teacherStaffId: teacherStaff.id, organizationId: orgId, branchId },
-    select: { classId: true },
+    select: { classId: true, subjects: true },
   });
   const assignedClassIds = assigned.map((a) => a.classId);
+  const assignedSubjectsByClassId = new Map(
+    assigned.map((a) => [a.classId, a.subjects ?? null])
+  );
 
   const classes = await prisma.class.findMany({
     where: { id: { in: assignedClassIds }, organizationId: orgId, branchId, status: "active" },
@@ -45,9 +48,10 @@ export default async function TeacherDashboardPage() {
 
   const activeSessions = await prisma.teacherClassSession.findMany({
     where: { teacherStaffId: teacherStaff.id, branchId, endedAt: null },
-    select: { classId: true },
+    select: { classId: true, startedAt: true },
   });
   const activeClassIds = activeSessions.map((s) => s.classId);
+  const activeSessionStartedAt = activeSessions[0]?.startedAt?.toISOString() ?? null;
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
   const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
@@ -99,8 +103,13 @@ export default async function TeacherDashboardPage() {
 
       {/* Using client component for actions */}
       <TeacherClassTrackingControls
-        classes={classes}
+        classes={classes.map((c) => ({
+          id: c.id,
+          name: c.name,
+          subjectLabel: assignedSubjectsByClassId.get(c.id),
+        }))}
         activeClassIds={activeClassIds}
+        activeSessionStartedAt={activeSessionStartedAt}
       />
 
       <TeacherMonthlyAttendanceReport />

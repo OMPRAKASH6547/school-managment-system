@@ -6,6 +6,7 @@ import { DashboardCharts } from "@/app/components/DashboardCharts";
 import { DashboardPanelNav } from "@/app/components/DashboardPanelNav";
 import { DashboardTeacherSessionActions } from "@/app/components/DashboardTeacherSessionActions";
 import { VerifyPaymentButton } from "@/app/components/VerifyPaymentButton";
+import { CoachingQuickEnrollmentForm } from "@/app/components/CoachingQuickEnrollmentForm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -13,11 +14,11 @@ import { Suspense } from "react";
 const SESSION_PAGE_SIZE = 10;
 const PENDING_PAGE_SIZE = 8;
 
-const DASHBOARD_PANELS = new Set(["all", "kpis", "attendance", "charts", "sessions", "pending"]);
+const DASHBOARD_PANELS = new Set(["all", "kpis", "attendance", "charts", "collections", "sessions", "pending"]);
 
 type DashboardPagePatch = { pendingPage?: number; sessionPage?: number };
 
-type DashboardPanelId = "kpis" | "attendance" | "charts" | "sessions" | "pending";
+type DashboardPanelId = "kpis" | "attendance" | "charts" | "collections" | "sessions" | "pending";
 
 /** Preserves filters and panel; use for pagination / panel-aware links on the school dashboard. */
 function schoolDashboardHrefFrom(
@@ -61,6 +62,11 @@ export default async function SchoolDashboard({
 
   const orgId = session.organizationId!;
   const branchId = await getResolvedBranchIdForSchool(session);
+  const organization = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { type: true },
+  });
+  const isCoaching = (organization?.type ?? "").toLowerCase() === "coaching";
 
   // Some "teacher" accounts are stored with `User.role = "staff"`.
   // If the staff record has `Staff.role = "teacher"`, send them to the teacher dashboard.
@@ -78,11 +84,34 @@ export default async function SchoolDashboard({
     typeof searchParams?.month === "string" ? searchParams.month : new Date().toISOString().slice(0, 7);
   const classDateParam =
     typeof searchParams?.classDate === "string" ? searchParams.classDate : new Date().toISOString().slice(0, 10);
+  const collectionViewRaw = typeof searchParams?.collectionView === "string" ? searchParams.collectionView : "month";
+  const collectionView: "month" | "year" = collectionViewRaw === "year" ? "year" : "month";
+  const collectionMonthParam =
+    typeof searchParams?.collectionMonth === "string" ? searchParams.collectionMonth : monthParam;
+  const collectionYearParam =
+    typeof searchParams?.collectionYear === "string" ? searchParams.collectionYear : monthParam.slice(0, 4);
   const [yearStr, monthStr] = monthParam.split("-");
   const year = Number(yearStr);
   const month = Number(monthStr); // 1-12
   const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
   const end = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+  const collectionPeriodStart =
+    collectionView === "year"
+      ? new Date(Date.UTC(Number(collectionYearParam), 0, 1, 0, 0, 0))
+      : new Date(`${collectionMonthParam}-01T00:00:00.000Z`);
+  const collectionPeriodEnd =
+    collectionView === "year"
+      ? new Date(Date.UTC(Number(collectionYearParam) + 1, 0, 1, 0, 0, 0))
+      : new Date(
+          Date.UTC(
+            Number(collectionMonthParam.slice(0, 4)),
+            Number(collectionMonthParam.slice(5, 7)),
+            1,
+            0,
+            0,
+            0
+          )
+        );
   const pendingPage = Math.max(
     1,
     Number(typeof searchParams?.pendingPage === "string" ? searchParams.pendingPage : "1") || 1
@@ -103,21 +132,30 @@ export default async function SchoolDashboard({
   const [
     students,
     classes,
+    feePlans,
     payments,
+    submittedPaymentsInMonth,
     bookSalesData,
     subscription,
     pendingPayments,
     pendingPaymentsCount,
     classSessionsCount,
     classSessionsOnDate,
+    liveSessions,
+    examsInMonth,
+    collectionPayments,
   ] = await Promise.all([
     prisma.student.findMany({
       where: { organizationId: orgId, branchId },
-      select: { id: true, gender: true, status: true, classId: true },
+      select: { id: true, firstName: true, lastName: true, gender: true, status: true, classId: true },
     }),
     prisma.class.findMany({
       where: { organizationId: orgId, branchId, status: "active" },
       include: { _count: { select: { students: true } } },
+    }),
+    prisma.feePlan.findMany({
+      where: { organizationId: orgId, branchId, isActive: true, payerType: "student" },
+      select: { id: true, amount: true, frequency: true, classId: true, createdAt: true },
     }),
     prisma.payment.findMany({
       where: {
@@ -126,7 +164,15 @@ export default async function SchoolDashboard({
         status: { in: ["verified", "completed"] },
         paidAt: { gte: start, lt: end },
       },
-      select: { amount: true },
+      select: { amount: true, payerType: true, feePlanId: true, studentId: true },
+    }),
+    prisma.payment.findMany({
+      where: {
+        organizationId: orgId,
+        branchId,
+        paidAt: { gte: start, lt: end },
+      },
+      select: { amount: true, payerType: true },
     }),
     prisma.bookSale.findMany({
       where: { organizationId: orgId, branchId, soldAt: { gte: start, lt: end } },
@@ -161,17 +207,67 @@ export default async function SchoolDashboard({
         verifiedAt: true,
       },
     }),
+    prisma.teacherClassSession.findMany({
+      where: { organizationId: orgId, branchId, endedAt: null },
+      orderBy: { startedAt: "desc" },
+      select: { id: true, teacherStaffId: true, classId: true, startedAt: true },
+      take: 6,
+    }),
+    prisma.exam.findMany({
+      where: { organizationId: orgId, branchId, startDate: { gte: start, lt: end } },
+      orderBy: { startDate: "desc" },
+      select: { id: true, name: true },
+      take: 24,
+    }),
+    prisma.payment.findMany({
+      where: {
+        organizationId: orgId,
+        branchId,
+        paidAt: { gte: collectionPeriodStart, lt: collectionPeriodEnd },
+      },
+      orderBy: { paidAt: "desc" },
+      select: {
+        id: true,
+        amount: true,
+        method: true,
+        payerType: true,
+        paidAt: true,
+        verifiedAt: true,
+        studentId: true,
+        staffId: true,
+      },
+      take: 500,
+    }),
   ]);
 
   const sessionTeacherIds = Array.from(new Set(classSessionsOnDate.map((s) => s.teacherStaffId)));
   const sessionClassIds = Array.from(new Set(classSessionsOnDate.map((s) => s.classId)));
+  const liveTeacherIds = Array.from(new Set(liveSessions.map((s) => s.teacherStaffId)));
+  const liveClassIds = Array.from(new Set(liveSessions.map((s) => s.classId)));
+  const leaderboardExamIds = examsInMonth.map((e) => e.id);
+  const leaderboardResults = leaderboardExamIds.length
+    ? await prisma.examResult.findMany({
+        where: { organizationId: orgId, branchId, examId: { in: leaderboardExamIds } },
+        select: { studentId: true, marksObtained: true },
+      })
+    : [];
+  const leaderboardStudentIds = Array.from(new Set(leaderboardResults.map((r) => r.studentId)));
+  const leaderboardStudents = leaderboardStudentIds.length
+    ? await prisma.student.findMany({
+        where: { id: { in: leaderboardStudentIds } },
+        select: { id: true, firstName: true, lastName: true, rollNo: true },
+      })
+    : [];
+  const leaderboardStudentMap = new Map(
+    leaderboardStudents.map((s) => [s.id, `${s.firstName} ${s.lastName}`.trim()])
+  );
   const [sessionTeachers, sessionClasses] = await Promise.all([
     prisma.staff.findMany({
-      where: { id: { in: sessionTeacherIds } },
+      where: { id: { in: [...sessionTeacherIds, ...liveTeacherIds] } },
       select: { id: true, firstName: true, lastName: true, employeeId: true },
     }),
     prisma.class.findMany({
-      where: { id: { in: sessionClassIds } },
+      where: { id: { in: [...sessionClassIds, ...liveClassIds] } },
       select: { id: true, name: true, section: true },
     }),
   ]);
@@ -183,10 +279,39 @@ export default async function SchoolDashboard({
   const girls = students.filter((s) => s.gender === "female").length;
   const active = students.filter((s) => s.status === "active").length;
   const left = students.filter((s) => s.status === "left" || s.status === "graduated").length;
-
-  const totalFee = subscription?.plan?.price ? totalStudents * subscription.plan.price : 0;
-  const collected = payments.reduce((s, p) => s + p.amount, 0);
+  const activeStudents = students.filter((s) => s.status === "active");
+  const activeStudentsByClass = new Map<string, number>();
+  for (const student of activeStudents) {
+    if (!student.classId) continue;
+    activeStudentsByClass.set(student.classId, (activeStudentsByClass.get(student.classId) ?? 0) + 1);
+  }
+  const hasSpecificFeePlans = feePlans.length > 0;
+  const currentMonthIndex = Number(monthParam.slice(5, 7)); // 1-12
+  const planBasedExpected = feePlans.reduce((sum, plan) => {
+    const eligible =
+      plan.classId && activeStudentsByClass.has(plan.classId)
+        ? activeStudentsByClass.get(plan.classId) ?? 0
+        : plan.classId
+        ? 0
+        : active;
+    if (eligible === 0) return sum;
+    let multiplier = 0;
+    if (plan.frequency === "monthly") multiplier = 1;
+    else if (plan.frequency === "quarterly") multiplier = [1, 4, 7, 10].includes(currentMonthIndex) ? 1 : 0;
+    else if (plan.frequency === "yearly") multiplier = currentMonthIndex === 1 ? 1 : 0;
+    else if (plan.frequency === "one_time") {
+      const createdMonth = plan.createdAt.toISOString().slice(0, 7);
+      multiplier = createdMonth === monthParam ? 1 : 0;
+    }
+    return sum + eligible * plan.amount * multiplier;
+  }, 0);
+  const fallbackExpected = subscription?.plan?.price ? active * subscription.plan.price : 0;
+  const totalFee = hasSpecificFeePlans ? planBasedExpected : fallbackExpected;
+  const collected = payments
+    .filter((p) => p.payerType === "student")
+    .reduce((s, p) => s + p.amount, 0);
   const pending = Math.max(0, totalFee - collected);
+  const submittedAllFee = submittedPaymentsInMonth.reduce((s, p) => s + p.amount, 0);
 
   let itemsSold = 0;
   // Revenue KPI shows fee revenue (payments) for the selected month.
@@ -221,6 +346,39 @@ export default async function SchoolDashboard({
 
   const panelRaw = typeof searchParams?.panel === "string" ? searchParams.panel : "all";
   const panel = DASHBOARD_PANELS.has(panelRaw) ? panelRaw : "all";
+  const leaderboardMap = new Map<string, number>();
+  for (const row of leaderboardResults) {
+    leaderboardMap.set(row.studentId, (leaderboardMap.get(row.studentId) ?? 0) + row.marksObtained);
+  }
+  const leaderboard = Array.from(leaderboardMap.entries())
+    .map(([studentId, totalMarks]) => ({ studentId, totalMarks }))
+    .sort((a, b) => b.totalMarks - a.totalMarks)
+    .slice(0, 8);
+  const submittedCollectionTotal = collectionPayments.reduce((s, p) => s + p.amount, 0);
+  const verifiedCollectionTotal = collectionPayments
+    .filter((p) => !!p.verifiedAt)
+    .reduce((s, p) => s + p.amount, 0);
+  const pendingCollectionTotal = Math.max(0, submittedCollectionTotal - verifiedCollectionTotal);
+  const dailyCollectionMap = new Map<
+    string,
+    { date: string; submitted: number; verified: number; pending: number; methods: Record<string, number> }
+  >();
+  const methodSummary = new Map<string, number>();
+  for (const row of collectionPayments) {
+    const key = row.paidAt.toISOString().slice(0, 10);
+    const existing =
+      dailyCollectionMap.get(key) ?? { date: key, submitted: 0, verified: 0, pending: 0, methods: {} };
+    existing.submitted += row.amount;
+    if (row.verifiedAt) existing.verified += row.amount;
+    else existing.pending += row.amount;
+    existing.methods[row.method] = (existing.methods[row.method] ?? 0) + row.amount;
+    dailyCollectionMap.set(key, existing);
+    methodSummary.set(row.method, (methodSummary.get(row.method) ?? 0) + row.amount);
+  }
+  const dailyCollectionRows = Array.from(dailyCollectionMap.values()).sort((a, b) =>
+    a.date < b.date ? 1 : -1
+  );
+  const methodRows = Array.from(methodSummary.entries()).sort((a, b) => b[1] - a[1]);
 
   const dash = {
     month: monthParam,
@@ -244,15 +402,108 @@ export default async function SchoolDashboard({
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-primary-600">School Admin Dashboard</h1>
+      <h1 className="text-2xl font-bold text-primary-600">
+        {isCoaching ? "Coaching Dashboard" : "School Admin Dashboard"}
+      </h1>
+      {isCoaching ? (
+        <p className="mt-1 text-sm text-slate-600">
+          Coaching mode enabled: showing lightweight coaching management workflows.
+        </p>
+      ) : null}
 
       <Suspense fallback={<div className="mt-4 h-14 animate-pulse rounded-xl bg-slate-100" aria-hidden />}>
-        <DashboardPanelNav />
+        <DashboardPanelNav isCoaching={isCoaching} />
       </Suspense>
 
       <DashboardFilters
         classes={classes.map((c) => ({ id: c.id, name: c.name, section: c.section }))}
       />
+
+      {isCoaching && panel === "all" ? (
+        <section className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm lg:col-span-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Live Class</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-900">{liveSessions.length}</p>
+            <p className="text-xs text-emerald-700">Active class session{liveSessions.length === 1 ? "" : "s"} now</p>
+            <div className="mt-3">
+              <Link href="/school/teacher" className="btn-secondary">
+                Open Teacher Class Control
+              </Link>
+            </div>
+            {liveSessions.length > 0 ? (
+              <ul className="mt-3 space-y-1 text-xs text-emerald-800">
+                {liveSessions.slice(0, 4).map((sessionRow) => {
+                  const teacher = teacherMap.get(sessionRow.teacherStaffId);
+                  const classItem = classMap.get(sessionRow.classId);
+                  return (
+                    <li key={sessionRow.id}>
+                      {teacher ? `${teacher.firstName} ${teacher.lastName}` : "Teacher"} -{" "}
+                      {classItem ? `${classItem.name}${classItem.section ? `-${classItem.section}` : ""}` : "Batch"}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-900">Quick student enrollment</h2>
+              <Link href="/school/students/new" className="text-xs text-primary-600 hover:underline">
+                Open full admission form
+              </Link>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              One-click admission with minimum fields. Full profile can be completed later.
+            </p>
+            <div className="mt-3">
+              <CoachingQuickEnrollmentForm
+                organizationId={orgId}
+                classes={classes.map((c) => ({ id: c.id, name: `${c.name}${c.section ? `-${c.section}` : ""}` }))}
+              />
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
+            <h2 className="text-base font-semibold text-slate-900">Rank / leaderboard</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Top student totals for exams in selected month.
+            </p>
+            {leaderboard.length === 0 ? (
+              <p className="mt-3 text-xs text-slate-500">No exam marks yet for this month.</p>
+            ) : (
+              <ol className="mt-3 space-y-1 text-sm">
+                {leaderboard.map((row, idx) => (
+                  <li key={row.studentId} className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1">
+                    <span className="truncate">
+                      #{idx + 1} {leaderboardStudentMap.get(row.studentId) ?? "Student"}
+                    </span>
+                    <span className="ml-2 text-slate-600">{row.totalMarks.toFixed(1)}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <Link href="/school/examinations/new" className="text-primary-600 hover:underline">
+                Create test series
+              </Link>
+              <Link href="/school/examinations" className="text-primary-600 hover:underline">
+                Evaluate results
+              </Link>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-3">
+            <h2 className="text-base font-semibold text-slate-900">Coaching quick actions</h2>
+            <div className="mt-3 flex flex-wrap gap-2 text-sm">
+              <Link href="/school/classes" className="btn-secondary">Batch-wise scheduling</Link>
+              <Link href="/school/examinations/new" className="btn-secondary">Create test series</Link>
+              <Link href="/school/examinations" className="btn-secondary">Evaluate tests</Link>
+              <Link href="/school/attendance" className="btn-secondary">Daily attendance</Link>
+              <Link href="/school/fees" className="btn-secondary">Fee management</Link>
+              <Link href="/school/books" className="btn-secondary">Material management</Link>
+              <Link href="/school/payment-verification" className="btn-secondary">Basic reports / verifications</Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {show("kpis") ? (
       <DashboardKPIs
@@ -267,6 +518,28 @@ export default async function SchoolDashboard({
         itemsSold={itemsSold}
         revenue={revenue}
       />
+      ) : null}
+      {show("kpis") ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Calculation Basis</p>
+            <p className="mt-1 text-sm text-slate-700">
+              {hasSpecificFeePlans
+                ? "Using active student fee plans for expected fee."
+                : "Using subscription plan price x active students."}
+            </p>
+          </div>
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">All Submitted Fee</p>
+            <p className="mt-1 text-2xl font-bold text-indigo-900">INR {submittedAllFee.toFixed(2)}</p>
+            <p className="text-xs text-indigo-700">Includes pending + verified for selected month</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Verified Collection</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-900">INR {collected.toFixed(2)}</p>
+            <p className="text-xs text-emerald-700">Student fee verified/completed in selected month</p>
+          </div>
+        </div>
       ) : null}
 
       {show("attendance") ? (
@@ -299,6 +572,153 @@ export default async function SchoolDashboard({
 
       {show("charts") ? (
       <DashboardCharts classStrength={classStrength} boys={boys} girls={girls} />
+      ) : null}
+
+      {show("collections") ? (
+      <div className="mt-8 card overflow-hidden p-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4">
+          <h2 className="text-lg font-semibold text-slate-900">Collection summary (all fee types)</h2>
+          <form className="flex flex-wrap items-center gap-2" method="GET">
+            <input type="hidden" name="month" value={monthParam} />
+            <input type="hidden" name="classDate" value={classDateParam} />
+            {panel !== "all" ? <input type="hidden" name="panel" value={panel} /> : null}
+            <select
+              name="collectionView"
+              defaultValue={collectionView}
+              className="input-field"
+            >
+              <option value="month">Month-wise</option>
+              <option value="year">Year-wise</option>
+            </select>
+            <input
+              type="month"
+              name="collectionMonth"
+              defaultValue={collectionMonthParam}
+              className="input-field"
+            />
+            <input
+              type="number"
+              name="collectionYear"
+              min={2000}
+              max={2100}
+              defaultValue={collectionYearParam}
+              className="input-field w-28"
+            />
+            <button className="btn-secondary" type="submit">
+              Apply
+            </button>
+          </form>
+        </div>
+        <div className="grid gap-3 px-6 pb-4 md:grid-cols-3">
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-indigo-700">Submitted Total</p>
+            <p className="mt-1 text-xl font-bold text-indigo-900">INR {submittedCollectionTotal.toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-emerald-700">Verified Total</p>
+            <p className="mt-1 text-xl font-bold text-emerald-900">INR {verifiedCollectionTotal.toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-amber-700">Pending Verification</p>
+            <p className="mt-1 text-xl font-bold text-amber-900">INR {pendingCollectionTotal.toFixed(2)}</p>
+          </div>
+        </div>
+        <div className="grid gap-4 border-t border-slate-200 px-6 py-4 lg:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Daily collection</h3>
+            {dailyCollectionRows.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">No collection records in selected period.</p>
+            ) : (
+              <div className="mt-2 overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Date</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase text-slate-500">Submitted</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase text-slate-500">Verified</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase text-slate-500">Pending</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {dailyCollectionRows.map((row) => (
+                      <tr key={row.date}>
+                        <td className="px-3 py-2 text-slate-700">{row.date}</td>
+                        <td className="px-3 py-2 text-right text-indigo-700">INR {row.submitted.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-emerald-700">INR {row.verified.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-amber-700">INR {row.pending.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Payment type summary</h3>
+            {methodRows.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">No payment-method data in selected period.</p>
+            ) : (
+              <div className="mt-2 overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Method</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium uppercase text-slate-500">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {methodRows.map(([method, amount]) => (
+                      <tr key={method}>
+                        <td className="px-3 py-2 text-slate-700 capitalize">{method}</td>
+                        <td className="px-3 py-2 text-right text-slate-900">INR {amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="border-t border-slate-200 px-6 py-4">
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold text-primary-700">
+              View detailed transactions (with payment type)
+            </summary>
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm whitespace-nowrap">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Date</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Payer Type</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Method</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium uppercase text-slate-500">Amount</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {collectionPayments.map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-3 py-2 text-slate-700">{new Date(row.paidAt).toLocaleDateString()}</td>
+                      <td className="px-3 py-2 text-slate-700 capitalize">{row.payerType}</td>
+                      <td className="px-3 py-2 text-slate-700 capitalize">{row.method}</td>
+                      <td className="px-3 py-2 text-right text-slate-900">INR {row.amount.toFixed(2)}</td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            row.verifiedAt ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {row.verifiedAt ? "Verified" : "Pending"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </div>
       ) : null}
 
       {show("sessions") ? (
