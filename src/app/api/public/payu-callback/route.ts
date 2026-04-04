@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { payuVerifyResponseHash } from "@/lib/payu";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
+import { getSuperAdminEmails, parseExtraNotifyEmails } from "@/lib/notification-recipients";
 
-function redirectToHome(path: string) {
-  const base = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-  return NextResponse.redirect(new URL(path, base), 302);
+function resolveOrigin(req: NextRequest): string {
+  const configuredBase = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL;
+  if (configuredBase) {
+    try {
+      return new URL(configuredBase).origin;
+    } catch {
+      // ignore and fallback
+    }
+  }
+  return req.nextUrl.origin;
+}
+
+function redirectToPath(req: NextRequest, path: string) {
+  return NextResponse.redirect(new URL(path, resolveOrigin(req)), 302);
 }
 
 /**
@@ -30,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     const salt = process.env.PAYU_MERCHANT_SALT;
     if (!salt || !txnid) {
-      return redirectToHome("/?payu=error");
+      return redirectToPath(req, "/payment/payu-status?status=error");
     }
 
     const expected = payuVerifyResponseHash({
@@ -60,12 +73,36 @@ export async function POST(req: NextRequest) {
     });
 
     if (ok) {
-      return redirectToHome("/?payu=success");
+      const rows = await prisma.subscriptionInquiry.findMany({
+        where: { payuTxnId: txnid },
+        take: 1,
+        select: { email: true, name: true, schoolName: true, phone: true },
+      });
+      const row = rows[0];
+      const platformEmails = [
+        ...new Set([
+          ...(await getSuperAdminEmails()),
+          ...parseExtraNotifyEmails(process.env.PLATFORM_ALERT_EMAILS),
+          ...(row?.email ? [row.email] : []),
+        ]),
+      ];
+      void notifyEmailAndWhatsApp({
+        emails: platformEmails,
+        phones: row?.phone ? [row.phone] : [],
+        subject: `PayU payment success — ${row?.schoolName ?? "Subscription"}`,
+        html: `<p>PayU reported a successful payment.</p>
+          <p><strong>Txn ID:</strong> ${txnid}</p>
+          <p><strong>Amount:</strong> ${amount}</p>
+          <p><strong>Product:</strong> ${productinfo}</p>
+          <p><strong>Customer:</strong> ${firstname} / ${email}</p>
+          <p><strong>School (if any):</strong> ${row?.schoolName ?? "—"}</p>`,
+      });
+      return redirectToPath(req, `/payment/payu-status?status=success&txnid=${encodeURIComponent(txnid)}`);
     }
-    return redirectToHome("/?payu=failed");
+    return redirectToPath(req, `/payment/payu-status?status=failed&txnid=${encodeURIComponent(txnid)}`);
   } catch (e) {
     console.error("[payu-callback]", e);
-    return redirectToHome("/?payu=error");
+    return redirectToPath(req, "/payment/payu-status?status=error");
   }
 }
 
@@ -76,11 +113,12 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const status = (sp.get("status") || "").toLowerCase();
+  const txnid = sp.get("txnid") || "";
   if (status === "success" || status === "captured") {
-    return redirectToHome("/?payu=success");
+    return redirectToPath(req, `/payment/payu-status?status=success&txnid=${encodeURIComponent(txnid)}`);
   }
   if (status === "failure" || status === "failed") {
-    return redirectToHome("/?payu=failed");
+    return redirectToPath(req, `/payment/payu-status?status=failed&txnid=${encodeURIComponent(txnid)}`);
   }
-  return redirectToHome("/?payu=error");
+  return redirectToPath(req, "/payment/payu-status?status=error");
 }

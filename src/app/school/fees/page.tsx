@@ -173,42 +173,20 @@ export default async function SchoolFeesPage({
         </a>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <h2 className="text-lg font-semibold text-slate-900">Fee plans</h2>
-          <CreateFeePlanForm classes={classes} organizationId={orgId} initialPayerType={tab} />
-          {tabPlans.length === 0 ? (
-            <p className="mt-4 text-slate-500">No fee plans yet. Create one above.</p>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {tabPlans.map((p) => (
-                <li key={p.id} className="flex justify-between text-sm">
-                  <span>{p.name}</span>
-                  <span>
-                    ₹{p.amount} ({p.frequency})
-                    <DeleteRowButton apiPath={`/api/school/fee-plans/${p.id}`} />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="card">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Record {tab === "student" ? "student" : "staff salary"} payment
-          </h2>
-          <RecordPaymentForm
-            feePlans={tabPlans}
-            students={students}
-            staff={staff}
-            organizationId={orgId}
-            initialPayerType={tab}
-          />
-        </div>
+      <div className="mt-6 card">
+        <h2 className="text-lg font-semibold text-slate-900">
+          Record {tab === "student" ? "student" : "staff salary"} payment
+        </h2>
+        <RecordPaymentForm
+          feePlans={tabPlans}
+          students={students}
+          staff={staff}
+          organizationId={orgId}
+          initialPayerType={tab}
+        />
       </div>
 
-      <div className="mt-8 card overflow-hidden p-0">
+      <div className="mt-6 card overflow-hidden p-0">
         <h2 className="px-6 py-4 text-lg font-semibold text-slate-900">
           Recent {tab === "student" ? "student" : "staff salary"} payments
         </h2>
@@ -262,23 +240,43 @@ export default async function SchoolFeesPage({
             </table>
           </div>
         )}
-      </div>
-      <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
-        <span>
-          Page {page} of {totalPages} ({paymentsTotal} records)
-        </span>
-        <div className="flex gap-2">
-          {page > 1 && (
-            <a className="btn-secondary" href={buildPageHref(page - 1)}>
-              Previous
-            </a>
-          )}
-          {page < totalPages && (
-            <a className="btn-secondary" href={buildPageHref(page + 1)}>
-              Next
-            </a>
-          )}
+        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3 text-sm text-slate-600">
+          <span>
+            Page {page} of {totalPages} ({paymentsTotal} records)
+          </span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <a className="btn-secondary" href={buildPageHref(page - 1)}>
+                Previous
+              </a>
+            )}
+            {page < totalPages && (
+              <a className="btn-secondary" href={buildPageHref(page + 1)}>
+                Next
+              </a>
+            )}
+          </div>
         </div>
+      </div>
+
+      <div className="mt-6 card">
+        <h2 className="text-lg font-semibold text-slate-900">Fee plans</h2>
+        <CreateFeePlanForm classes={classes} organizationId={orgId} initialPayerType={tab} />
+        {tabPlans.length === 0 ? (
+          <p className="mt-4 text-slate-500">No fee plans yet. Create one above.</p>
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {tabPlans.map((p) => (
+              <li key={p.id} className="flex justify-between text-sm">
+                <span>{p.name}</span>
+                <span>
+                  ₹{p.amount} ({p.frequency})
+                  <DeleteRowButton apiPath={`/api/school/fee-plans/${p.id}`} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
+import { HomeModuleShowcase } from "@/app/components/HomeModuleShowcase";
 import { PricingPlansSection, type PublicPlan } from "@/app/components/PricingPlansSection";
 import { AppLogo } from "@/components/AppLogo";
 import { prisma } from "@/lib/db";
@@ -94,6 +95,8 @@ export default async function HomePage() {
             </div>
           ))}
         </div>
+
+        <HomeModuleShowcase />
 
         <PricingPlansSection plans={plans} />
       </main>

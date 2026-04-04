@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { requireSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
 
 export async function POST(
   _req: NextRequest,
@@ -20,6 +21,19 @@ export async function POST(
         approvedBy: session.id,
       },
     });
+    const org = await prisma.organization.findUnique({
+      where: { id },
+      select: { name: true, email: true, phone: true },
+    });
+    if (org?.email) {
+      void notifyEmailAndWhatsApp({
+        emails: [org.email],
+        phones: org.phone ? [org.phone] : [],
+        subject: `Approved: ${org.name}`,
+        html: `<p>Your organization <strong>${org.name}</strong> has been <strong>approved</strong>.</p>
+          <p>You can sign in to your school dashboard with your registered email.</p>`,
+      });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof Error && e.message.includes("Unauthorized")) {

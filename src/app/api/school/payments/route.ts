@@ -4,7 +4,8 @@ import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganizatio
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
-import { sendNotificationEmail } from "@/lib/notifications";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
+import { getSchoolNotifierEmails, studentFamilyPhones } from "@/lib/notification-recipients";
 import {
   firstZodIssueMessage,
   LIMITS,
@@ -168,30 +169,43 @@ export async function POST(req: NextRequest) {
       select: { id: true, amount: true, method: true, paidAt: true },
     });
 
-    const [org, student, staff] = await Promise.all([
+    const [org, student, staff, adminEmails] = await Promise.all([
       prisma.organization.findUnique({
         where: { id: data.organizationId },
-        select: { name: true, email: true },
+        select: { name: true, email: true, phone: true },
       }),
       data.studentId
         ? prisma.student.findUnique({
             where: { id: data.studentId },
-            select: { firstName: true, lastName: true, email: true },
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              motherPhone: true,
+              guardianPhone: true,
+            },
           })
         : Promise.resolve(null),
       data.staffId
         ? prisma.staff.findUnique({
             where: { id: data.staffId },
-            select: { firstName: true, lastName: true, email: true },
+            select: { firstName: true, lastName: true, email: true, phone: true },
           })
         : Promise.resolve(null),
+      getSchoolNotifierEmails(data.organizationId),
     ]);
 
     const payerName = `${student?.firstName ?? staff?.firstName ?? ""} ${student?.lastName ?? staff?.lastName ?? ""}`.trim();
     const payerEmail = student?.email ?? staff?.email ?? null;
+    const phones: string[] = [];
+    if (org?.phone) phones.push(org.phone);
+    if (student) phones.push(...studentFamilyPhones(student));
+    if (staff?.phone) phones.push(staff.phone);
 
-    await sendNotificationEmail({
-      to: [org?.email, payerEmail].filter(Boolean) as string[],
+    void notifyEmailAndWhatsApp({
+      emails: [...adminEmails, org?.email, payerEmail].filter(Boolean) as string[],
+      phones,
       subject: `Fee submitted: ${payerName || "Payer"}`.trim(),
       html: `
         <p>A new fee payment has been submitted.</p>

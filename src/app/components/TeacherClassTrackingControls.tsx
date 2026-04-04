@@ -1,20 +1,40 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function TeacherClassTrackingControls({
   classes,
   activeClassIds,
   activeSessionStartedAt = null,
+  completedTodayClassIds = [],
 }: {
   classes: { id: string; name: string; subjectLabel?: string | null }[];
   activeClassIds: string[];
   activeSessionStartedAt?: string | null;
+  /** Classes already ended today — cannot start again until the next calendar day */
+  completedTodayClassIds?: string[];
 }) {
   const router = useRouter();
-  const activeSet = new Set(activeClassIds);
-  const activeClassId = activeClassIds[0] ?? null;
+  const serverActiveKey = useMemo(() => [...activeClassIds].sort().join("|"), [activeClassIds]);
+  const [pendingActiveClassId, setPendingActiveClassId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pendingActiveClassId && activeClassIds.includes(pendingActiveClassId)) {
+      setPendingActiveClassId(null);
+    }
+  }, [serverActiveKey, pendingActiveClassId, activeClassIds]);
+
+  const effectiveActiveIds = useMemo(() => {
+    if (pendingActiveClassId && !activeClassIds.includes(pendingActiveClassId)) {
+      return [...activeClassIds, pendingActiveClassId];
+    }
+    return activeClassIds;
+  }, [activeClassIds, pendingActiveClassId]);
+
+  const activeSet = new Set(effectiveActiveIds);
+  const completedTodaySet = new Set(completedTodayClassIds);
+  const activeClassId = effectiveActiveIds[0] ?? null;
   const activeClassName = activeClassId
     ? classes.find((c) => c.id === activeClassId)?.name ?? "Active class"
     : null;
@@ -37,7 +57,8 @@ export function TeacherClassTrackingControls({
         setError(data.error || "Start failed");
         return;
       }
-      router.refresh();
+      setPendingActiveClassId(classId);
+      await router.refresh();
     } catch {
       setError("Start failed");
     } finally {
@@ -60,7 +81,8 @@ export function TeacherClassTrackingControls({
         setError(data.error || "End failed");
         return;
       }
-      router.refresh();
+      setPendingActiveClassId(null);
+      await router.refresh();
     } catch {
       setError("End failed");
     } finally {
@@ -117,21 +139,13 @@ export function TeacherClassTrackingControls({
         <tbody className="divide-y divide-slate-200 bg-white">
           {classes.map((c) => {
             const active = activeSet.has(c.id);
+            const finishedToday = completedTodaySet.has(c.id);
             return (
               <tr key={c.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-sm text-slate-900 font-medium">{c.name}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{c.subjectLabel ?? "All assigned subjects"}</td>
                 <td className="px-4 py-3 text-right">
-                  {!active ? (
-                    <button
-                      type="button"
-                      onClick={() => start(c.id)}
-                      disabled={loadingClassId === c.id || !!activeClassId}
-                      className="btn-primary"
-                    >
-                      {loadingClassId === c.id ? "Starting..." : "Start Class"}
-                    </button>
-                  ) : (
+                  {active ? (
                     <button
                       type="button"
                       onClick={() => end(c.id)}
@@ -139,6 +153,17 @@ export function TeacherClassTrackingControls({
                       className="rounded-lg bg-school-green px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                     >
                       {loadingClassId === c.id ? "Ending..." : "End Class"}
+                    </button>
+                  ) : finishedToday ? (
+                    <span className="text-sm font-medium text-slate-500">Completed today</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => start(c.id)}
+                      disabled={loadingClassId === c.id || !!activeClassId}
+                      className="btn-primary"
+                    >
+                      {loadingClassId === c.id ? "Starting..." : "Start Class"}
                     </button>
                   )}
                 </td>

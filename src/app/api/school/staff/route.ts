@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { requirePermission } from "@/lib/permissions";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
 import {
   firstZodIssueMessage,
   LIMITS,
@@ -191,6 +192,24 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+
+    const orgRecord = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true, email: true, phone: true },
+    });
+    void notifyEmailAndWhatsApp({
+      emails: [data.email, orgRecord?.email].filter(Boolean) as string[],
+      phones: [...(data.phone ? [data.phone] : []), ...(orgRecord?.phone ? [orgRecord.phone] : [])],
+      subject: `Staff account created — ${orgRecord?.name ?? "School"}`,
+      html: `
+        <p>You have been added to <strong>${orgRecord?.name ?? "the school portal"}</strong>.</p>
+        <p><strong>Login email:</strong> ${data.email}</p>
+        <p><strong>Temporary password:</strong> ${plainPassword}</p>
+        <p><strong>Employee ID:</strong> ${employeeId}</p>
+        <p><strong>Role:</strong> ${data.role}</p>
+        <p>Sign in with the email above and this password. Store it securely.</p>
+      `,
+    });
 
     return NextResponse.json({ ok: true, password: plainPassword, employeeId });
   } catch (e) {

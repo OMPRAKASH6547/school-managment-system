@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requireOrganization } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { findOpenTeacherClassSessions } from "@/lib/teacher-class-session";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
+import { getSchoolNotifierEmails } from "@/lib/notification-recipients";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -20,7 +23,7 @@ export async function POST(req: NextRequest) {
     const body = bodySchema.parse(await req.json());
 
     const teacherStaff = await prisma.staff.findFirst({
-      where: { email: session.email, organizationId: orgId, branchId, status: "active" },
+      where: { email: session.email, organizationId: orgId, branchId, status: "active", role: "teacher" },
       select: { id: true },
     });
     if (!teacherStaff) return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
@@ -36,15 +39,43 @@ export async function POST(req: NextRequest) {
     });
     if (!assignment) return NextResponse.json({ error: "Not assigned to this class" }, { status: 403 });
 
-    const active = await prisma.teacherClassSession.findFirst({
-      where: { teacherStaffId: teacherStaff.id, classId: body.classId, branchId, endedAt: null },
-      select: { id: true },
+    const openForClass = await findOpenTeacherClassSessions(orgId, branchId, teacherStaff.id, {
+      classId: body.classId,
     });
-    if (!active) return NextResponse.json({ error: "No active session for this class" }, { status: 404 });
+    if (openForClass.length === 0) {
+      return NextResponse.json({ error: "No active session for this class" }, { status: 404 });
+    }
 
-    await prisma.teacherClassSession.update({
-      where: { id: active.id },
-      data: { endedAt: new Date() },
+    const endedAt = new Date();
+    await Promise.all(
+      openForClass.map((s) =>
+        prisma.teacherClassSession.update({
+          where: { id: s.id },
+          data: { endedAt },
+        })
+      )
+    );
+
+    const [cls, teacherName, org, adminEmails] = await Promise.all([
+      prisma.class.findFirst({
+        where: { id: body.classId, organizationId: orgId, branchId },
+        select: { name: true },
+      }),
+      prisma.staff.findFirst({
+        where: { id: teacherStaff.id },
+        select: { firstName: true, lastName: true },
+      }),
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true, phone: true },
+      }),
+      getSchoolNotifierEmails(orgId),
+    ]);
+    void notifyEmailAndWhatsApp({
+      emails: adminEmails,
+      phones: org?.phone ? [org.phone] : [],
+      subject: `Class ended: ${cls?.name ?? "Batch"}`,
+      html: `<p><strong>${teacherName?.firstName ?? ""} ${teacherName?.lastName ?? ""}</strong> ended class <strong>${cls?.name ?? "—"}</strong> at ${endedAt.toLocaleString()} (${org?.name ?? "School"}).</p>`,
     });
 
     return NextResponse.json({ ok: true });

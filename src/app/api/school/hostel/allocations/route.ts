@@ -3,6 +3,8 @@ import { getSession, getSelectedBranchId, resolveBranchIdForOrganization, requir
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
+import { getSchoolNotifierEmails, studentFamilyPhones } from "@/lib/notification-recipients";
 
 const bodySchema = z.object({
   roomId: z.string().min(1),
@@ -51,6 +53,28 @@ export async function POST(req: NextRequest) {
     await prisma.hostelRoom.update({
       where: { id: data.roomId },
       data: { currentOccupancy: { increment: 1 } },
+    });
+
+    const [org, adminEmails] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true, email: true, phone: true },
+      }),
+      getSchoolNotifierEmails(orgId),
+    ]);
+    const stuName = `${student.firstName} ${student.lastName}`.trim();
+    void notifyEmailAndWhatsApp({
+      emails: [...adminEmails, org?.email, student.email].filter(Boolean) as string[],
+      phones: [
+        ...(org?.phone ? [org.phone] : []),
+        ...studentFamilyPhones({
+          phone: student.phone,
+          motherPhone: student.motherPhone,
+          guardianPhone: student.guardianPhone,
+        }),
+      ],
+      subject: `Hostel allocation: ${room.name}`,
+      html: `<p><strong>${stuName}</strong> has been allocated hostel room <strong>${room.name}</strong>${room.floor ? ` (floor ${room.floor})` : ""}.</p><p>${org?.name ?? "School"}</p>`,
     });
 
     return NextResponse.json({ ok: true });

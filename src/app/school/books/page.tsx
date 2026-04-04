@@ -88,98 +88,26 @@ export default async function BooksPage({
         </div>
       </div>
       <p className="mt-1 text-slate-600">Sell books, copies, stationery. Generate invoice PDF with school logo.</p>
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-school-navy">Products</h2>
-          <form className="mt-3 flex gap-2" method="GET">
-            <input
-              name="q"
-              defaultValue={q}
-              placeholder="Filter by name, SKU, category"
-              className="input-field flex-1"
-            />
-            <button type="submit" className="btn-secondary">
-              Filter
-            </button>
-          </form>
-          {products.length === 0 ? (
-            <p className="mt-2 text-slate-500">No products. <Link href="/school/books/products/new" className="text-primary-600 hover:underline">Add one</Link>.</p>
-          ) : (
-            <>
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Name</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">SKU</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Category</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium uppercase text-slate-500">Price</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium uppercase text-slate-500">Stock</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium uppercase text-slate-500">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {products.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-2 text-sm text-slate-900">{p.name}</td>
-                        <td className="px-4 py-2 text-sm text-slate-600">{p.sku || "—"}</td>
-                        <td className="px-4 py-2 text-sm text-slate-600">{p.category || "—"}</td>
-                        <td className="px-4 py-2 text-sm text-right text-slate-700">₹{p.price}</td>
-                        <td className="px-4 py-2 text-sm text-right text-slate-700">{p.stock}</td>
-                        <td className="px-4 py-2 text-sm text-right">
-                          <Link href={`/school/books/products/${p.id}/edit`} className="text-primary-600 hover:underline">
-                            Edit
-                          </Link>
-                          <DeleteRowButton apiPath={`/api/school/book-products/${p.id}`} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
-                <span>
-                  Page {page} of {pageCount}
-                </span>
-                <div className="flex gap-2">
-                  <Link
-                    href={`/school/books?${qs}page=${prevPage}`}
-                    className={`rounded border px-3 py-1 ${page <= 1 ? "pointer-events-none opacity-50" : "hover:bg-slate-50"}`}
-                  >
-                    Prev
-                  </Link>
-                  <Link
-                    href={`/school/books?${qs}page=${nextPage}`}
-                    className={`rounded border px-3 py-1 ${page >= pageCount ? "pointer-events-none opacity-50" : "hover:bg-slate-50"}`}
-                  >
-                    Next
-                  </Link>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-school-navy">Record sale</h2>
-          <RecordBookSaleForm
-            products={allProductsForSale}
-            sets={sets.map((s) => ({
-              id: s.id,
-              name: s.name,
-              items: s.items.map((i) => ({
-                productId: i.productId,
-                quantity: i.quantity,
-                productName: i.product?.name ?? null,
-                unitPrice: i.product?.price ?? null,
-              })),
-            }))}
-            organizationId={orgId}
-            sellerDisplayName={sellerDisplayName}
-            sellerEmail={session?.email ?? null}
-          />
-        </div>
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-school-navy">Record sale</h2>
+        <RecordBookSaleForm
+          products={allProductsForSale}
+          sets={sets.map((s) => ({
+            id: s.id,
+            name: s.name,
+            items: s.items.map((i) => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              productName: i.product?.name ?? null,
+              unitPrice: i.product?.price ?? null,
+            })),
+          }))}
+          organizationId={orgId}
+          sellerDisplayName={sellerDisplayName}
+          sellerEmail={session?.email ?? null}
+        />
       </div>
-      <div className="mt-8 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <h2 className="px-6 py-4 text-lg font-semibold text-school-navy">Recent sales</h2>
         {recentSales.length === 0 ? (
           <div className="px-6 pb-6 text-slate-500">No sales yet.</div>
@@ -214,6 +142,83 @@ export default async function BooksPage({
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-school-navy">Products</h2>
+        <form className="mt-3 flex gap-2" method="GET">
+          <input
+            name="q"
+            defaultValue={q}
+            placeholder="Filter by name, SKU, category"
+            className="input-field flex-1"
+          />
+          <button type="submit" className="btn-secondary">
+            Filter
+          </button>
+        </form>
+        {products.length === 0 ? (
+          <p className="mt-2 text-slate-500">
+            No products.{" "}
+            <Link href="/school/books/products/new" className="text-primary-600 hover:underline">
+              Add one
+            </Link>
+            .
+          </p>
+        ) : (
+          <>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Name</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">SKU</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Category</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase text-slate-500">Price</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase text-slate-500">Stock</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase text-slate-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {products.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2 text-sm text-slate-900">{p.name}</td>
+                      <td className="px-4 py-2 text-sm text-slate-600">{p.sku || "—"}</td>
+                      <td className="px-4 py-2 text-sm text-slate-600">{p.category || "—"}</td>
+                      <td className="px-4 py-2 text-sm text-right text-slate-700">₹{p.price}</td>
+                      <td className="px-4 py-2 text-sm text-right text-slate-700">{p.stock}</td>
+                      <td className="px-4 py-2 text-sm text-right">
+                        <Link href={`/school/books/products/${p.id}/edit`} className="text-primary-600 hover:underline">
+                          Edit
+                        </Link>
+                        <DeleteRowButton apiPath={`/api/school/book-products/${p.id}`} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
+              <span>
+                Page {page} of {pageCount}
+              </span>
+              <div className="flex gap-2">
+                <Link
+                  href={`/school/books?${qs}page=${prevPage}`}
+                  className={`rounded border px-3 py-1 ${page <= 1 ? "pointer-events-none opacity-50" : "hover:bg-slate-50"}`}
+                >
+                  Prev
+                </Link>
+                <Link
+                  href={`/school/books?${qs}page=${nextPage}`}
+                  className={`rounded border px-3 py-1 ${page >= pageCount ? "pointer-events-none opacity-50" : "hover:bg-slate-50"}`}
+                >
+                  Next
+                </Link>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </>

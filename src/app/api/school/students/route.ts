@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
 import { randomBytes } from "crypto";
-import { sendNotificationEmail } from "@/lib/notifications";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
+import { getSchoolNotifierEmails, studentFamilyPhones } from "@/lib/notification-recipients";
 import {
   firstZodIssueMessage,
   LIMITS,
@@ -225,17 +226,28 @@ export async function POST(req: NextRequest) {
     });
     admissionPaymentId = payment.id;
 
-    const org = await prisma.organization.findUnique({
-      where: { id: data.organizationId },
-      select: { name: true, email: true },
-    });
-    const creator = await prisma.user.findUnique({
-      where: { id: session.id },
-      select: { name: true, email: true },
-    });
+    const [org, creator, adminEmails] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: data.organizationId },
+        select: { name: true, email: true, phone: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: session.id },
+        select: { name: true, email: true },
+      }),
+      getSchoolNotifierEmails(data.organizationId),
+    ]);
 
-    await sendNotificationEmail({
-      to: [org?.email, data.email].filter(Boolean) as string[],
+    void notifyEmailAndWhatsApp({
+      emails: [...adminEmails, org?.email, data.email].filter(Boolean) as string[],
+      phones: [
+        ...(org?.phone ? [org.phone] : []),
+        ...studentFamilyPhones({
+          phone: data.phone ?? null,
+          motherPhone: data.motherPhone ?? null,
+          guardianPhone: data.guardianPhone ?? null,
+        }),
+      ],
       subject: `New admission: ${data.firstName} ${data.lastName}`,
       html: `
         <p>New student admission created.</p>

@@ -69,8 +69,16 @@ export async function POST(req: NextRequest) {
     const phone = (body.phone ?? "").replace(/\D/g, "").slice(0, 15);
     const hash = payuPaymentHash({ key, txnid, amount, productinfo, firstname, email, salt });
 
-    const base = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const surl = `${base.replace(/\/$/, "")}/api/public/payu-callback`;
+    const configuredBase = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL;
+    let origin = req.nextUrl.origin;
+    if (configuredBase) {
+      try {
+        origin = new URL(configuredBase).origin;
+      } catch {
+        // keep request origin fallback
+      }
+    }
+    const surl = `${origin}/api/public/payu-callback`;
     const furl = surl;
 
     if (process.env.PAYU_DEBUG === "1") {

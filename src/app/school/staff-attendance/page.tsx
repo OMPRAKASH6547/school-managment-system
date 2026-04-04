@@ -64,11 +64,7 @@ export default async function StaffAttendancePage() {
           </div>
         </div>
       )}
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <StaffAttendanceForm staff={staff} defaultDate={today} />
-      </div>
       {me && (
-        <>
         <div className="mt-6 card overflow-hidden p-0">
           <div className="px-6 py-4">
             <h2 className="text-lg font-semibold text-slate-900">
@@ -101,8 +97,10 @@ export default async function StaffAttendancePage() {
             </table>
           </div>
         </div>
-        </>
       )}
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <StaffAttendanceForm staff={staff} defaultDate={today} />
+      </div>
     </>
   );
 }

@@ -13,6 +13,8 @@ import {
   zPersonName,
   zPhoneOpt,
 } from "@/lib/field-validation";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
+import { getSuperAdminEmails, parseExtraNotifyEmails } from "@/lib/notification-recipients";
 
 const bodySchema = z.object({
   name: zPersonName,
@@ -116,6 +118,25 @@ export async function POST(req: NextRequest) {
         throw error;
       }
     }
+
+    const platformEmails = [
+      ...new Set([
+        ...(await getSuperAdminEmails()),
+        ...parseExtraNotifyEmails(process.env.PLATFORM_ALERT_EMAILS),
+      ]),
+    ];
+    void notifyEmailAndWhatsApp({
+      emails: [...platformEmails, data.email],
+      phones: data.phone ? [data.phone] : [],
+      subject: `New registration pending: ${data.orgName}`,
+      html: `
+        <p>A new school/coaching has registered and awaits super-admin approval.</p>
+        <p><strong>Organization:</strong> ${data.orgName} (${data.orgType})</p>
+        <p><strong>Admin:</strong> ${data.name} &lt;${data.email}&gt;</p>
+        <p><strong>Phone:</strong> ${data.phone ?? "—"}</p>
+        <p><strong>City:</strong> ${data.city ?? "—"}</p>
+      `,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e) {

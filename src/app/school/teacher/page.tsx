@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { findOpenTeacherClassSessions, getLocalDayRange } from "@/lib/teacher-class-session";
 import Link from "next/link";
 import { TeacherClassTrackingControls } from "@/app/components/TeacherClassTrackingControls";
 import { TeacherMonthlyAttendanceReport } from "@/app/components/TeacherMonthlyAttendanceReport";
+
+export const dynamic = "force-dynamic";
 
 export default async function TeacherDashboardPage() {
   const session = await getSession();
@@ -46,12 +49,23 @@ export default async function TeacherDashboardPage() {
     orderBy: { name: "asc" },
   });
 
-  const activeSessions = await prisma.teacherClassSession.findMany({
-    where: { teacherStaffId: teacherStaff.id, branchId, endedAt: null },
-    select: { classId: true, startedAt: true },
-  });
-  const activeClassIds = activeSessions.map((s) => s.classId);
+  const activeSessions = await findOpenTeacherClassSessions(orgId, branchId, teacherStaff.id);
+  const activeClassIds = Array.from(new Set(activeSessions.map((s) => s.classId)));
   const activeSessionStartedAt = activeSessions[0]?.startedAt?.toISOString() ?? null;
+
+  const { start: dayStart, end: dayEnd } = getLocalDayRange();
+  const sessionsToday = await prisma.teacherClassSession.findMany({
+    where: {
+      organizationId: orgId,
+      teacherStaffId: teacherStaff.id,
+      branchId,
+      startedAt: { gte: dayStart, lt: dayEnd },
+    },
+    select: { classId: true, endedAt: true },
+  });
+  const completedTodayClassIds = Array.from(
+    new Set(sessionsToday.filter((s) => s.endedAt != null).map((s) => s.classId))
+  );
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
   const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
@@ -100,19 +114,6 @@ export default async function TeacherDashboardPage() {
           <p className="mt-2 text-2xl font-bold text-violet-900">₹{collectedTotal.toFixed(2)}</p>
         </div>
       </div>
-
-      {/* Using client component for actions */}
-      <TeacherClassTrackingControls
-        classes={classes.map((c) => ({
-          id: c.id,
-          name: c.name,
-          subjectLabel: assignedSubjectsByClassId.get(c.id),
-        }))}
-        activeClassIds={activeClassIds}
-        activeSessionStartedAt={activeSessionStartedAt}
-      />
-
-      <TeacherMonthlyAttendanceReport />
 
       <div className="mt-6 card overflow-hidden p-0">
         <h2 className="px-6 py-4 text-lg font-semibold text-slate-900">Payments collected by you (this month)</h2>
@@ -171,6 +172,20 @@ export default async function TeacherDashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* Using client component for actions */}
+      <TeacherClassTrackingControls
+        classes={classes.map((c) => ({
+          id: c.id,
+          name: c.name,
+          subjectLabel: assignedSubjectsByClassId.get(c.id),
+        }))}
+        activeClassIds={activeClassIds}
+        activeSessionStartedAt={activeSessionStartedAt}
+        completedTodayClassIds={completedTodayClassIds}
+      />
+
+      <TeacherMonthlyAttendanceReport />
     </>
   );
 }

@@ -4,6 +4,8 @@ import { getSelectedBranchId, resolveBranchIdForOrganization, requireOrganizatio
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions";
+import { notifyEmailAndWhatsApp } from "@/lib/notifications";
+import { getSchoolNotifierEmails, studentFamilyPhones } from "@/lib/notification-recipients";
 import { firstZodIssueMessage, LIMITS, zCuidId, zOptionalStr, zPhoneOpt } from "@/lib/field-validation";
 
 const PAYMENT_METHODS = ["cash", "upi", "card", "bank_transfer", "cheque", "other"] as const;
@@ -37,12 +39,30 @@ export async function POST(req: NextRequest) {
     if (data.organizationId !== orgId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     let studentId: string | null = null;
+    let studentContact: {
+      email: string | null;
+      phone: string | null;
+      motherPhone: string | null;
+      guardianPhone: string | null;
+      firstName: string;
+      lastName: string;
+    } | null = null;
     if (data.studentId) {
       const st = await prisma.student.findFirst({
         where: { id: data.studentId, organizationId: orgId, branchId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          motherPhone: true,
+          guardianPhone: true,
+        },
       });
       if (!st) return NextResponse.json({ error: "Invalid student" }, { status: 400 });
       studentId = st.id;
+      studentContact = st;
     }
 
     let bookSetId: string | null = null;
@@ -122,6 +142,36 @@ export async function POST(req: NextRequest) {
         data: { stock: { decrement: item.quantity } },
       });
     }
+
+    const [org, adminEmails] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true, email: true, phone: true },
+      }),
+      getSchoolNotifierEmails(orgId),
+    ]);
+    const phones: string[] = [];
+    if (org?.phone) phones.push(org.phone);
+    if (data.customerPhone) phones.push(data.customerPhone);
+    if (studentContact) {
+      phones.push(
+        ...studentFamilyPhones({
+          phone: studentContact.phone,
+          motherPhone: studentContact.motherPhone,
+          guardianPhone: studentContact.guardianPhone,
+        })
+      );
+    }
+    void notifyEmailAndWhatsApp({
+      emails: [...adminEmails, org?.email, studentContact?.email].filter(Boolean) as string[],
+      phones,
+      subject: `Book sale: ${invoiceNo}`,
+      html: `<p>Book shop sale recorded.</p>
+        <p><strong>Invoice:</strong> ${invoiceNo}</p>
+        <p><strong>Amount:</strong> INR ${totalAmount}</p>
+        <p><strong>Payment:</strong> ${data.paymentMethod}</p>
+        <p><strong>Customer:</strong> ${data.customerName ?? (studentContact ? `${studentContact.firstName} ${studentContact.lastName}` : "Walk-in")}</p>`,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e) {

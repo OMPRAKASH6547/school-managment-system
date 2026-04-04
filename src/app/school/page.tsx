@@ -1,4 +1,5 @@
 import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
+import { findOpenSessionsForBranch } from "@/lib/teacher-class-session";
 import { prisma } from "@/lib/db";
 import { DashboardFilters } from "@/app/components/DashboardFilters";
 import { DashboardKPIs } from "@/app/components/DashboardKPIs";
@@ -207,12 +208,7 @@ export default async function SchoolDashboard({
         verifiedAt: true,
       },
     }),
-    prisma.teacherClassSession.findMany({
-      where: { organizationId: orgId, branchId, endedAt: null },
-      orderBy: { startedAt: "desc" },
-      select: { id: true, teacherStaffId: true, classId: true, startedAt: true },
-      take: 6,
-    }),
+    findOpenSessionsForBranch(orgId, branchId, 6),
     prisma.exam.findMany({
       where: { organizationId: orgId, branchId, startDate: { gte: start, lt: end } },
       orderBy: { startDate: "desc" },
@@ -419,163 +415,79 @@ export default async function SchoolDashboard({
         classes={classes.map((c) => ({ id: c.id, name: c.name, section: c.section }))}
       />
 
-      {isCoaching && panel === "all" ? (
-        <section className="mt-6 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm lg:col-span-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Live Class</p>
-            <p className="mt-2 text-2xl font-bold text-emerald-900">{liveSessions.length}</p>
-            <p className="text-xs text-emerald-700">Active class session{liveSessions.length === 1 ? "" : "s"} now</p>
-            <div className="mt-3">
-              <Link href="/school/teacher" className="btn-secondary">
-                Open Teacher Class Control
-              </Link>
-            </div>
-            {liveSessions.length > 0 ? (
-              <ul className="mt-3 space-y-1 text-xs text-emerald-800">
-                {liveSessions.slice(0, 4).map((sessionRow) => {
-                  const teacher = teacherMap.get(sessionRow.teacherStaffId);
-                  const classItem = classMap.get(sessionRow.classId);
-                  return (
-                    <li key={sessionRow.id}>
-                      {teacher ? `${teacher.firstName} ${teacher.lastName}` : "Teacher"} -{" "}
-                      {classItem ? `${classItem.name}${classItem.section ? `-${classItem.section}` : ""}` : "Batch"}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-slate-900">Quick student enrollment</h2>
-              <Link href="/school/students/new" className="text-xs text-primary-600 hover:underline">
-                Open full admission form
-              </Link>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              One-click admission with minimum fields. Full profile can be completed later.
-            </p>
-            <div className="mt-3">
-              <CoachingQuickEnrollmentForm
-                organizationId={orgId}
-                classes={classes.map((c) => ({ id: c.id, name: `${c.name}${c.section ? `-${c.section}` : ""}` }))}
-              />
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
-            <h2 className="text-base font-semibold text-slate-900">Rank / leaderboard</h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Top student totals for exams in selected month.
-            </p>
-            {leaderboard.length === 0 ? (
-              <p className="mt-3 text-xs text-slate-500">No exam marks yet for this month.</p>
-            ) : (
-              <ol className="mt-3 space-y-1 text-sm">
-                {leaderboard.map((row, idx) => (
-                  <li key={row.studentId} className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1">
-                    <span className="truncate">
-                      #{idx + 1} {leaderboardStudentMap.get(row.studentId) ?? "Student"}
-                    </span>
-                    <span className="ml-2 text-slate-600">{row.totalMarks.toFixed(1)}</span>
-                  </li>
+      {show("pending") ? (
+      <div className="mt-6 card overflow-hidden p-0">
+        <div className="flex items-center justify-between px-6 py-4">
+          <h2 className="text-lg font-semibold text-slate-900">Pending payment verification</h2>
+          <Link href="/school/fees" className="text-sm text-primary-600 hover:underline">
+            Open fee management
+          </Link>
+        </div>
+        {pendingPayments.length === 0 ? (
+          <div className="px-6 pb-6 text-slate-500">No pending payments.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm whitespace-nowrap">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Student</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Method</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Date</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium uppercase text-slate-500">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 bg-white">
+                {pendingPayments.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-6 py-4 text-slate-900">
+                      {p.student?.firstName} {p.student?.lastName} {p.student?.rollNo ? `(${p.student.rollNo})` : ""}
+                    </td>
+                    <td className="px-6 py-4 text-slate-600">INR {p.amount}</td>
+                    <td className="px-6 py-4 text-slate-600">{p.method}</td>
+                    <td className="px-6 py-4 text-slate-600">{new Date(p.paidAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <VerifyPaymentButton paymentId={p.id} />
+                        <Link href="/school/payment-verification" className="text-sm text-primary-600 hover:underline">
+                          Open queue
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
                 ))}
-              </ol>
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3 text-sm text-slate-600">
+          <span>
+            Page {pendingPage} of {pendingPages} ({pendingPaymentsCount} pending) · {PENDING_PAGE_SIZE} per page
+          </span>
+          <div className="flex gap-2">
+            {pendingPage > 1 && (
+              <a
+                className="btn-secondary"
+                href={hrefDash({ pendingPage: pendingPage - 1 })}
+              >
+                Previous
+              </a>
             )}
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <Link href="/school/examinations/new" className="text-primary-600 hover:underline">
-                Create test series
-              </Link>
-              <Link href="/school/examinations" className="text-primary-600 hover:underline">
-                Evaluate results
-              </Link>
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-3">
-            <h2 className="text-base font-semibold text-slate-900">Coaching quick actions</h2>
-            <div className="mt-3 flex flex-wrap gap-2 text-sm">
-              <Link href="/school/classes" className="btn-secondary">Batch-wise scheduling</Link>
-              <Link href="/school/examinations/new" className="btn-secondary">Create test series</Link>
-              <Link href="/school/examinations" className="btn-secondary">Evaluate tests</Link>
-              <Link href="/school/attendance" className="btn-secondary">Daily attendance</Link>
-              <Link href="/school/fees" className="btn-secondary">Fee management</Link>
-              <Link href="/school/books" className="btn-secondary">Material management</Link>
-              <Link href="/school/payment-verification" className="btn-secondary">Basic reports / verifications</Link>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {show("kpis") ? (
-      <DashboardKPIs
-        total={totalStudents}
-        boys={boys}
-        girls={girls}
-        active={active}
-        left={left}
-        totalFee={totalFee}
-        collected={collected}
-        pending={pending}
-        itemsSold={itemsSold}
-        revenue={revenue}
-      />
-      ) : null}
-      {show("kpis") ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Calculation Basis</p>
-            <p className="mt-1 text-sm text-slate-700">
-              {hasSpecificFeePlans
-                ? "Using active student fee plans for expected fee."
-                : "Using subscription plan price x active students."}
-            </p>
-          </div>
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">All Submitted Fee</p>
-            <p className="mt-1 text-2xl font-bold text-indigo-900">INR {submittedAllFee.toFixed(2)}</p>
-            <p className="text-xs text-indigo-700">Includes pending + verified for selected month</p>
-          </div>
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Verified Collection</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-900">INR {collected.toFixed(2)}</p>
-            <p className="text-xs text-emerald-700">Student fee verified/completed in selected month</p>
+            {pendingPage < pendingPages && (
+              <a
+                className="btn-secondary"
+                href={hrefDash({ pendingPage: pendingPage + 1 })}
+              >
+                Next
+              </a>
+            )}
           </div>
         </div>
-      ) : null}
-
-      {show("attendance") ? (
-        <>
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
-              <p className="text-lg sm:text-xl font-bold text-school-green">{presentCount}</p>
-              <p className="text-xs sm:text-sm text-slate-500">Present</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
-              <p className="text-lg sm:text-xl font-bold text-red-600">{absentCount}</p>
-              <p className="text-xs sm:text-sm text-slate-500">Absent</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
-              <p className="text-lg sm:text-xl font-bold text-primary-600">{lateCount}</p>
-              <p className="text-xs sm:text-sm text-slate-500">Late</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
-              <p className="text-lg sm:text-xl font-bold text-slate-700">{leaveCount}</p>
-              <p className="text-xs sm:text-sm text-slate-500">Leave</p>
-            </div>
-          </div>
-          <div className="mt-4">
-            <Link href="/school/attendance" className="text-sm text-primary-600 hover:underline">
-              Open Attendance page to view attendance records
-            </Link>
-          </div>
-        </>
-      ) : null}
-
-      {show("charts") ? (
-      <DashboardCharts classStrength={classStrength} boys={boys} girls={girls} />
+      </div>
       ) : null}
 
       {show("collections") ? (
-      <div className="mt-8 card overflow-hidden p-0">
+      <div className="mt-6 card overflow-hidden p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4">
           <h2 className="text-lg font-semibold text-slate-900">Collection summary (all fee types)</h2>
           <form className="flex flex-wrap items-center gap-2" method="GET">
@@ -721,6 +633,163 @@ export default async function SchoolDashboard({
       </div>
       ) : null}
 
+      {isCoaching && panel === "all" ? (
+        <section className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm lg:col-span-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Live Class</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-900">{liveSessions.length}</p>
+            <p className="text-xs text-emerald-700">Active class session{liveSessions.length === 1 ? "" : "s"} now</p>
+            <div className="mt-3">
+              <Link href="/school/teacher" className="btn-secondary">
+                Open Teacher Class Control
+              </Link>
+            </div>
+            {liveSessions.length > 0 ? (
+              <ul className="mt-3 space-y-1 text-xs text-emerald-800">
+                {liveSessions.slice(0, 4).map((sessionRow) => {
+                  const teacher = teacherMap.get(sessionRow.teacherStaffId);
+                  const classItem = classMap.get(sessionRow.classId);
+                  return (
+                    <li key={sessionRow.id}>
+                      {teacher ? `${teacher.firstName} ${teacher.lastName}` : "Teacher"} -{" "}
+                      {classItem ? `${classItem.name}${classItem.section ? `-${classItem.section}` : ""}` : "Batch"}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-900">Quick student enrollment</h2>
+              <Link href="/school/students/new" className="text-xs text-primary-600 hover:underline">
+                Open full admission form
+              </Link>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              One-click admission with minimum fields. Full profile can be completed later.
+            </p>
+            <div className="mt-3">
+              <CoachingQuickEnrollmentForm
+                organizationId={orgId}
+                classes={classes.map((c) => ({ id: c.id, name: `${c.name}${c.section ? `-${c.section}` : ""}` }))}
+              />
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
+            <h2 className="text-base font-semibold text-slate-900">Rank / leaderboard</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Top student totals for exams in selected month.
+            </p>
+            {leaderboard.length === 0 ? (
+              <p className="mt-3 text-xs text-slate-500">No exam marks yet for this month.</p>
+            ) : (
+              <ol className="mt-3 space-y-1 text-sm">
+                {leaderboard.map((row, idx) => (
+                  <li key={row.studentId} className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1">
+                    <span className="truncate">
+                      #{idx + 1} {leaderboardStudentMap.get(row.studentId) ?? "Student"}
+                    </span>
+                    <span className="ml-2 text-slate-600">{row.totalMarks.toFixed(1)}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <Link href="/school/examinations/new" className="text-primary-600 hover:underline">
+                Create test series
+              </Link>
+              <Link href="/school/examinations" className="text-primary-600 hover:underline">
+                Evaluate results
+              </Link>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-3">
+            <h2 className="text-base font-semibold text-slate-900">Coaching quick actions</h2>
+            <div className="mt-3 flex flex-wrap gap-2 text-sm">
+              <Link href="/school/classes" className="btn-secondary">Batch-wise scheduling</Link>
+              <Link href="/school/examinations/new" className="btn-secondary">Create test series</Link>
+              <Link href="/school/examinations" className="btn-secondary">Evaluate tests</Link>
+              <Link href="/school/attendance" className="btn-secondary">Daily attendance</Link>
+              <Link href="/school/fees" className="btn-secondary">Fee management</Link>
+              <Link href="/school/books" className="btn-secondary">Material management</Link>
+              <Link href="/school/payment-verification" className="btn-secondary">Basic reports / verifications</Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {show("kpis") ? (
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Calculation Basis</p>
+            <p className="mt-1 text-sm text-slate-700">
+              {hasSpecificFeePlans
+                ? "Using active student fee plans for expected fee."
+                : "Using subscription plan price x active students."}
+            </p>
+          </div>
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">All Submitted Fee</p>
+            <p className="mt-1 text-2xl font-bold text-indigo-900">INR {submittedAllFee.toFixed(2)}</p>
+            <p className="text-xs text-indigo-700">Includes pending + verified for selected month</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Verified Collection</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-900">INR {collected.toFixed(2)}</p>
+            <p className="text-xs text-emerald-700">Student fee verified/completed in selected month</p>
+          </div>
+        </div>
+      ) : null}
+      {show("kpis") ? (
+      <div className="mt-4">
+      <DashboardKPIs
+        total={totalStudents}
+        boys={boys}
+        girls={girls}
+        active={active}
+        left={left}
+        totalFee={totalFee}
+        collected={collected}
+        pending={pending}
+        itemsSold={itemsSold}
+        revenue={revenue}
+      />
+      </div>
+      ) : null}
+
+      {show("attendance") ? (
+        <>
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
+              <p className="text-lg sm:text-xl font-bold text-school-green">{presentCount}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Present</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
+              <p className="text-lg sm:text-xl font-bold text-red-600">{absentCount}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Absent</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
+              <p className="text-lg sm:text-xl font-bold text-primary-600">{lateCount}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Late</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm text-center">
+              <p className="text-lg sm:text-xl font-bold text-slate-700">{leaveCount}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Leave</p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Link href="/school/attendance" className="text-sm text-primary-600 hover:underline">
+              Open Attendance page to view attendance records
+            </Link>
+          </div>
+        </>
+      ) : null}
+
+      {show("charts") ? (
+      <DashboardCharts classStrength={classStrength} boys={boys} girls={girls} />
+      ) : null}
+
       {show("sessions") ? (
       <div className="mt-8 card overflow-hidden p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4">
@@ -823,77 +892,6 @@ export default async function SchoolDashboard({
             </div>
           </div>
         ) : null}
-      </div>
-      ) : null}
-
-      {show("pending") ? (
-      <div className="mt-8 card overflow-hidden p-0">
-        <div className="flex items-center justify-between px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">Pending payment verification</h2>
-          <Link href="/school/fees" className="text-sm text-primary-600 hover:underline">
-            Open fee management
-          </Link>
-        </div>
-        {pendingPayments.length === 0 ? (
-          <div className="px-6 pb-6 text-slate-500">No pending payments.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm whitespace-nowrap">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Student</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Method</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-slate-500">Date</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium uppercase text-slate-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 bg-white">
-                {pendingPayments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="px-6 py-4 text-slate-900">
-                      {p.student?.firstName} {p.student?.lastName} {p.student?.rollNo ? `(${p.student.rollNo})` : ""}
-                    </td>
-                    <td className="px-6 py-4 text-slate-600">INR {p.amount}</td>
-                    <td className="px-6 py-4 text-slate-600">{p.method}</td>
-                    <td className="px-6 py-4 text-slate-600">{new Date(p.paidAt).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <VerifyPaymentButton paymentId={p.id} />
-                        <Link href="/school/payment-verification" className="text-sm text-primary-600 hover:underline">
-                          Open queue
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <div className="flex items-center justify-between border-t border-slate-200 px-6 py-3 text-sm text-slate-600">
-          <span>
-            Page {pendingPage} of {pendingPages} ({pendingPaymentsCount} pending) · {PENDING_PAGE_SIZE} per page
-          </span>
-          <div className="flex gap-2">
-            {pendingPage > 1 && (
-              <a
-                className="btn-secondary"
-                href={hrefDash({ pendingPage: pendingPage - 1 })}
-              >
-                Previous
-              </a>
-            )}
-            {pendingPage < pendingPages && (
-              <a
-                className="btn-secondary"
-                href={hrefDash({ pendingPage: pendingPage + 1 })}
-              >
-                Next
-              </a>
-            )}
-          </div>
-        </div>
       </div>
       ) : null}
     </>
