@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 
 type MockVariant =
   | "dashboard"
@@ -623,34 +623,15 @@ function MockFrame({
   );
 }
 
-function ModuleCard({ mod, index }: { mod: ModuleDef; index: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [show, setShow] = useState(false);
+const SLIDE_INTERVAL_MS = 5500;
+const SWIPE_MIN_PX = 48;
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([e]) => {
-        if (e?.isIntersecting) setShow(true);
-      },
-      { rootMargin: "0px 0px -8% 0px", threshold: 0.08 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
+function ModuleSlidePanel({ mod }: { mod: ModuleDef }) {
   return (
-    <article
-      ref={ref}
-      className={`group rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-lg backdrop-blur-md transition-all duration-500 hover:border-primary-400/35 hover:bg-white/[0.07] hover:shadow-2xl hover:shadow-primary-900/20 ${
-        show ? "animate-home-fade-up opacity-100" : "opacity-0 translate-y-8"
-      }`}
-      style={{ animationDelay: show ? `${Math.min(index, 12) * 60}ms` : "0ms" }}
-    >
+    <article className="group rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-lg backdrop-blur-md transition-all duration-500 hover:border-primary-400/35 hover:bg-white/[0.07] hover:shadow-2xl hover:shadow-primary-900/20">
       <div className="mb-4 overflow-hidden rounded-xl border border-slate-200/80 bg-slate-100 shadow-md transition-colors duration-500 group-hover:border-primary-500/40 group-hover:shadow-lg">
         <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">App preview</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Snapshot</span>
           <span className="text-[10px] font-medium text-school-navy">{mod.title}</span>
         </div>
         <MockFrame variant={mod.variant} navActive={mod.navActive} moduleTitle={mod.title} />
@@ -666,6 +647,45 @@ function ModuleCard({ mod, index }: { mod: ModuleDef; index: number }) {
 }
 
 export function HomeModuleShowcase() {
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduceMotion(mq.matches);
+    const onChange = () => setReduceMotion(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion || paused) return;
+    const id = window.setInterval(() => {
+      setActive((i) => (i + 1) % MODULES.length);
+    }, SLIDE_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [reduceMotion, paused]);
+
+  const go = (delta: number) => {
+    setActive((i) => (i + delta + MODULES.length) % MODULES.length);
+  };
+
+  const onTouchStart = (e: TouchEvent) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    if (touchStartX.current == null) return;
+    const endX = e.changedTouches[0]?.clientX ?? touchStartX.current;
+    const dx = endX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < SWIPE_MIN_PX) return;
+    go(dx < 0 ? 1 : -1);
+  };
+
+  const slideId = (i: number) => `home-module-slide-${i}`;
+
   return (
     <section className="mt-24 border-t border-white/10 pt-20" aria-labelledby="modules-heading">
       <div className="mx-auto max-w-3xl text-center">
@@ -674,15 +694,104 @@ export function HomeModuleShowcase() {
           Every module, one connected workspace
         </h2>
         <p className="mt-4 text-base text-slate-400 sm:text-lg">
-          Below is how each area looks in the app—illustrative previews of the same screens your admins and teachers use
-          after signup and approval.
+          A quick look at the tools your team uses every day—fees, classes, library, transport, and more in one place.
         </p>
       </div>
 
-      <div className="mx-auto mt-14 grid max-w-6xl gap-8 sm:grid-cols-2 lg:grid-cols-3">
-        {MODULES.map((mod, index) => (
-          <ModuleCard key={mod.title} mod={mod} index={index} />
-        ))}
+      <div
+        className="mx-auto mt-14 w-full max-w-3xl px-4 sm:px-6"
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="Dashboard module previews"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocusCapture={() => setPaused(true)}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaused(false);
+        }}
+      >
+        <div className="relative w-full">
+          {/* Viewport: fixed width so each slide is exactly one full frame (no side peek). */}
+          <div
+            className="w-full overflow-hidden rounded-2xl"
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
+            <div
+              className={`flex ${reduceMotion ? "" : "transition-transform duration-500 ease-out"}`}
+              style={{
+                width: `${MODULES.length * 100}%`,
+                transform: `translateX(-${(100 / MODULES.length) * active}%)`,
+              }}
+            >
+              {MODULES.map((mod, i) => (
+                <div
+                  key={mod.title}
+                  id={slideId(i)}
+                  role="group"
+                  aria-roledescription="slide"
+                  aria-label={`${i + 1} of ${MODULES.length}: ${mod.title}`}
+                  aria-hidden={i !== active}
+                  className="shrink-0"
+                  style={{ width: `${100 / MODULES.length}%` }}
+                >
+                  <ModuleSlidePanel mod={mod} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            className="absolute left-2 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-school-dark/90 text-white shadow-lg backdrop-blur-sm transition hover:border-primary-400/50 hover:bg-primary-600/90 sm:flex"
+            aria-label="Previous module"
+          >
+            <span className="sr-only">Previous</span>
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => go(1)}
+            className="absolute right-2 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-school-dark/90 text-white shadow-lg backdrop-blur-sm transition hover:border-primary-400/50 hover:bg-primary-600/90 sm:flex"
+            aria-label="Next module"
+          >
+            <span className="sr-only">Next</span>
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2" role="tablist" aria-label="Choose module slide">
+          {MODULES.map((mod, i) => (
+            <button
+              key={mod.title}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              aria-controls={slideId(i)}
+              className={`h-2.5 rounded-full transition-all duration-300 ${
+                i === active ? "w-8 bg-primary-400" : "w-2.5 bg-white/25 hover:bg-white/40"
+              }`}
+              onClick={() => setActive(i)}
+              aria-label={`Show ${mod.title}`}
+            />
+          ))}
+        </div>
+
+        <p className="mt-3 text-center text-xs text-slate-500 tabular-nums" aria-live="polite">
+          {active + 1} / {MODULES.length}
+        </p>
+        <span className="sr-only" aria-live="polite">
+          {reduceMotion
+            ? "Slideshow is manual only because reduced motion is on."
+            : paused
+              ? "Slideshow paused."
+              : ""}
+        </span>
       </div>
     </section>
   );
