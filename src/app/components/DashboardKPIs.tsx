@@ -18,6 +18,8 @@ interface DashboardKPIsProps {
   pending: number;
   itemsSold: number;
   revenue: number;
+  expenses: number;
+  profitLoss: number;
 }
 
 export function DashboardKPIs({
@@ -31,6 +33,8 @@ export function DashboardKPIs({
   pending,
   itemsSold,
   revenue,
+  expenses,
+  profitLoss,
 }: DashboardKPIsProps) {
   const kpis = [
     { label: "Total Students", value: total, color: "text-school-navy" },
@@ -77,6 +81,19 @@ export function DashboardKPIs({
             {formatMoney(revenue)}
           </p>
           <p className="text-xs sm:text-sm text-slate-500">Revenue</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-2">
+        <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 sm:p-4 shadow-sm flex flex-col items-center">
+          <p className="text-base sm:text-lg font-bold text-rose-800">{formatMoney(expenses)}</p>
+          <p className="text-xs sm:text-sm text-rose-700">Expenses</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm flex flex-col items-center">
+          <p className={`text-base sm:text-lg font-bold ${profitLoss >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            {profitLoss >= 0 ? "+" : ""}{formatMoney(profitLoss)}
+          </p>
+          <p className="text-xs sm:text-sm text-slate-500">Profit / Loss</p>
         </div>
       </div>
 

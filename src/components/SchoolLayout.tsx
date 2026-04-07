@@ -56,6 +56,7 @@ const navItems: NavItem[] = [
   { href: "/school/teacher", label: "Teacher Dashboard", icon: "TD" },
   { href: "/school/staff-attendance", label: "Staff Attendance", icon: "SA" },
   { href: "/school/fees", label: "Fee Management", icon: "FE" },
+  { href: "/school/expenses", label: "Expenses", icon: "XP" },
   { href: "/school/payment-verification", label: "Payment Verification", icon: "PV" },
   { href: "/school/library", label: "Library", icon: "LB" },
   { href: "/school/books", label: "Books & Copy", icon: "BK" },
@@ -74,6 +75,7 @@ function MenuIcon({ href }: { href: string }) {
   if (href === "/school/examinations") return <span aria-hidden>📝</span>;
   if (href === "/school/attendance") return <span aria-hidden>📅</span>;
   if (href === "/school/fees") return <span aria-hidden>💳</span>;
+  if (href === "/school/expenses") return <span aria-hidden>💸</span>;
   if (href === "/school/payment-verification") return <span aria-hidden>✅</span>;
   if (href === "/school/library") return <span aria-hidden>📚</span>;
   if (href === "/school/books") return <span aria-hidden>📖</span>;
@@ -109,6 +111,7 @@ export function SchoolLayout({
     "/school/attendance": "Attendance",
     "/school/teacher": "Live Class Control",
     "/school/fees": "Fee Management",
+    "/school/expenses": "Expenses",
     "/school/payment-verification": "Fee Verification",
     "/school/books": "Material Management",
   };
@@ -122,6 +125,7 @@ export function SchoolLayout({
     "/school/teacher",
     "/school/staff-attendance",
     "/school/fees",
+    "/school/expenses",
     "/school/payment-verification",
     "/school/books",
     "/school/settings",
@@ -255,6 +259,7 @@ export function SchoolLayout({
     "/school/teacher": "dashboard",
     "/school/staff-attendance": "staff-attendance",
     "/school/fees": "fees",
+    "/school/expenses": "expenses",
     "/school/payment-verification": "fees.verify",
     "/school/library": "library",
     "/school/books": "books",

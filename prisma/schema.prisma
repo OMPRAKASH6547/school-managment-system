@@ -28,6 +28,13 @@ model Organization {
   pdfAccentColor String?
   // Dashboard sidebar palette: slate | navy | emerald | indigo | rose
   dashboardTheme String? @default("slate")
+  // Advanced setup: tenant-level fee payment gateway configuration.
+  paymentGatewayEnabled Boolean @default(false)
+  paymentGatewayProvider String? // e.g. payu
+  payuMerchantKey String?
+  payuMerchantSalt String?
+  payuSuccessUrl String?
+  payuFailureUrl String?
   status      String   @default("pending") // pending | approved | rejected | suspended
   approvedAt  DateTime?
   approvedBy  String?
@@ -49,8 +56,26 @@ model Organization {
   bookSales       BookSale[]
   transportRoutes   TransportRoute[]
   transportVehicles TransportVehicle[]
+  expenses        Expense[]
 
   branches        Branch[]
+}
+
+model Expense {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String?
+  title          String
+  category       String?
+  amount         Float
+  expenseDate    DateTime
+  paymentMethod  String? // cash | upi | card | bank_transfer | cheque | other
+  notes          String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
 }
 
 // ============ BRANCHES (Tenant sub-division) ============
@@ -379,6 +404,24 @@ model TeacherClassSession {
   updatedAt DateTime @updatedAt
 
   @@unique([teacherStaffId, classId, startedAt])
+}
+
+model ClassReview {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  branchId       String?
+  studentId      String
+  sessionId      String
+  classId        String
+  teacherStaffId String
+  subjectName    String?
+  rating         Int
+  comment        String
+  tags           Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([studentId, sessionId])
 }
 
 // ============ STAFF ATTENDANCE ============

@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const token = await createSessionToken(user.id);
     const redirect =
-      user.role === "super_admin" ? "/super-admin" : "/school";
+      user.role === "super_admin" ? "/super-admin" : user.role === "student" ? "/student" : "/school";
     const res = NextResponse.json({ ok: true, redirect });
     applySessionCookie(res, token);
     return res;

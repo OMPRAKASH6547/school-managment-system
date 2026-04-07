@@ -16,6 +16,9 @@ export function PricingPlansSection({ plans }: { plans: PublicPlan[] }) {
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, { email: string; name: string; phone: string; schoolName: string }>>({});
+  const [fieldErrors, setFieldErrors] = useState<
+    Record<string, { email?: string; name?: string; phone?: string; schoolName?: string }>
+  >({});
 
   function field(planId: string, key: keyof (typeof forms)[string], value: string) {
     setForms((prev) => ({
@@ -25,9 +28,31 @@ export function PricingPlansSection({ plans }: { plans: PublicPlan[] }) {
         [key]: value,
       },
     }));
+    setFieldErrors((prev) => ({
+      ...prev,
+      [planId]: { ...(prev[planId] ?? {}), [key]: undefined },
+    }));
+  }
+
+  function validateForDemo(planId: string): boolean {
+    const f = forms[planId] ?? { email: "", name: "", phone: "", schoolName: "" };
+    const next: { email?: string } = {};
+    if (!f.email.trim()) next.email = "Email is required.";
+    setFieldErrors((prev) => ({ ...prev, [planId]: { ...(prev[planId] ?? {}), ...next } }));
+    return Object.keys(next).length === 0;
+  }
+
+  function validateForPayment(planId: string): boolean {
+    const f = forms[planId] ?? { email: "", name: "", phone: "", schoolName: "" };
+    const next: { email?: string; name?: string } = {};
+    if (!f.email.trim()) next.email = "Email is required.";
+    if (!f.name.trim()) next.name = "Name is required.";
+    setFieldErrors((prev) => ({ ...prev, [planId]: { ...(prev[planId] ?? {}), ...next } }));
+    return Object.keys(next).length === 0;
   }
 
   async function requestDemo(planId: string) {
+    if (!validateForDemo(planId)) return;
     const f = forms[planId] ?? { email: "", name: "", phone: "", schoolName: "" };
     setLoadingId(`demo-${planId}`);
     setMsg(null);
@@ -55,10 +80,7 @@ export function PricingPlansSection({ plans }: { plans: PublicPlan[] }) {
 
   async function payWithPayU(planId: string) {
     const f = forms[planId] ?? { email: "", name: "", phone: "", schoolName: "" };
-    if (!f.email.trim() || !f.name.trim()) {
-      setMsg({ type: "err", text: "Email and name are required for payment." });
-      return;
-    }
+    if (!validateForPayment(planId)) return;
     setLoadingId(`pay-${planId}`);
     setMsg(null);
     try {
@@ -120,6 +142,7 @@ export function PricingPlansSection({ plans }: { plans: PublicPlan[] }) {
       <div className="mt-10 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => {
           const f = forms[plan.id] ?? { email: "", name: "", phone: "", schoolName: "" };
+          const errs = fieldErrors[plan.id] ?? {};
           return (
             <div key={plan.id} className="card flex flex-col border-white/10 bg-white/5 backdrop-blur">
               <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
@@ -137,6 +160,7 @@ export function PricingPlansSection({ plans }: { plans: PublicPlan[] }) {
                   value={f.email}
                   onChange={(e) => field(plan.id, "email", e.target.value)}
                 />
+                {errs.email ? <p className="mt-1 text-xs text-red-300">{errs.email}</p> : null}
                 <input
                   type="text"
                   placeholder="Your name * (for payment)"
@@ -144,6 +168,7 @@ export function PricingPlansSection({ plans }: { plans: PublicPlan[] }) {
                   value={f.name}
                   onChange={(e) => field(plan.id, "name", e.target.value)}
                 />
+                {errs.name ? <p className="mt-1 text-xs text-red-300">{errs.name}</p> : null}
                 <input
                   type="tel"
                   placeholder="Phone"

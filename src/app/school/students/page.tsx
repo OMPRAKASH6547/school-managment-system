@@ -3,6 +3,7 @@ import { getSession, getResolvedBranchIdForSchool } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { DeleteRowButton } from "@/app/components/DeleteRowButton";
+import { StudentBulkUploadForm } from "@/app/components/StudentBulkUploadForm";
 
 const PAGE_SIZE = 10;
 
@@ -125,6 +126,9 @@ export default async function SchoolStudentsPage({
           <Link href="/school/students" className="btn-secondary">Reset</Link>
         </div>
       </form>
+      <div className="mt-4">
+        <StudentBulkUploadForm />
+      </div>
       <div className="mt-6 card overflow-hidden p-0">
         {students.length === 0 ? (
           <div className="p-12 text-center text-slate-500">

@@ -9,6 +9,7 @@ const PANELS: { id: string; label: string }[] = [
   { id: "attendance", label: "Attendance" },
   { id: "charts", label: "Charts" },
   { id: "collections", label: "Collections" },
+  { id: "expenses", label: "Expenses" },
   { id: "sessions", label: "Class sessions" },
   { id: "pending", label: "Pending payments" },
 ];

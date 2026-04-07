@@ -15,11 +15,11 @@ import { Suspense } from "react";
 const SESSION_PAGE_SIZE = 10;
 const PENDING_PAGE_SIZE = 8;
 
-const DASHBOARD_PANELS = new Set(["all", "kpis", "attendance", "charts", "collections", "sessions", "pending"]);
+const DASHBOARD_PANELS = new Set(["all", "kpis", "attendance", "charts", "collections", "expenses", "sessions", "pending"]);
 
 type DashboardPagePatch = { pendingPage?: number; sessionPage?: number };
 
-type DashboardPanelId = "kpis" | "attendance" | "charts" | "collections" | "sessions" | "pending";
+type DashboardPanelId = "kpis" | "attendance" | "charts" | "collections" | "expenses" | "sessions" | "pending";
 
 /** Preserves filters and panel; use for pagination / panel-aware links on the school dashboard. */
 function schoolDashboardHrefFrom(
@@ -145,6 +145,7 @@ export default async function SchoolDashboard({
     liveSessions,
     examsInMonth,
     collectionPayments,
+    expensesInMonth,
   ] = await Promise.all([
     prisma.student.findMany({
       where: { organizationId: orgId, branchId },
@@ -234,6 +235,12 @@ export default async function SchoolDashboard({
       },
       take: 500,
     }),
+    prisma.expense.findMany({
+      where: { organizationId: orgId, branchId, expenseDate: { gte: start, lt: end } },
+      orderBy: { expenseDate: "desc" },
+      select: { id: true, title: true, amount: true, expenseDate: true, category: true, paymentMethod: true },
+      take: 300,
+    }),
   ]);
 
   const sessionTeacherIds = Array.from(new Set(classSessionsOnDate.map((s) => s.teacherStaffId)));
@@ -312,6 +319,8 @@ export default async function SchoolDashboard({
   let itemsSold = 0;
   // Revenue KPI shows fee revenue (payments) for the selected month.
   let revenue = collected;
+  const expensesTotal = expensesInMonth.reduce((s, e) => s + e.amount, 0);
+  const profitLoss = revenue - expensesTotal;
   for (const sale of bookSalesData) {
     for (const item of sale.items) {
       itemsSold += item.quantity;
@@ -754,7 +763,64 @@ export default async function SchoolDashboard({
         pending={pending}
         itemsSold={itemsSold}
         revenue={revenue}
+        expenses={expensesTotal}
+        profitLoss={profitLoss}
       />
+      </div>
+      ) : null}
+
+      {show("expenses") ? (
+      <div className="mt-6 card overflow-hidden p-0">
+        <div className="flex items-center justify-between px-6 py-4">
+          <h2 className="text-lg font-semibold text-slate-900">Expenses (selected month)</h2>
+          <Link href="/school/expenses" className="text-sm text-primary-600 hover:underline">Open expenses module</Link>
+        </div>
+        <div className="grid gap-3 px-6 pb-4 md:grid-cols-3">
+          <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-rose-700">Monthly expenses</p>
+            <p className="mt-1 text-xl font-bold text-rose-900">INR {expensesTotal.toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-emerald-700">Revenue (verified fee)</p>
+            <p className="mt-1 text-xl font-bold text-emerald-900">INR {revenue.toFixed(2)}</p>
+          </div>
+          <div className={`rounded-xl border p-4 ${profitLoss >= 0 ? "border-emerald-100 bg-emerald-50" : "border-red-100 bg-red-50"}`}>
+            <p className={`text-xs uppercase tracking-wide ${profitLoss >= 0 ? "text-emerald-700" : "text-red-700"}`}>Profit / Loss</p>
+            <p className={`mt-1 text-xl font-bold ${profitLoss >= 0 ? "text-emerald-900" : "text-red-900"}`}>
+              {profitLoss >= 0 ? "+" : ""}INR {profitLoss.toFixed(2)}
+            </p>
+          </div>
+        </div>
+        <div className="border-t border-slate-200 px-6 py-4">
+          {expensesInMonth.length === 0 ? (
+            <p className="text-sm text-slate-500">No expenses recorded in selected month.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-xs sm:text-sm whitespace-nowrap">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Date</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Title</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Category</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium uppercase text-slate-500">Method</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium uppercase text-slate-500">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {expensesInMonth.slice(0, 20).map((e) => (
+                    <tr key={e.id}>
+                      <td className="px-3 py-2 text-slate-700">{new Date(e.expenseDate).toLocaleDateString()}</td>
+                      <td className="px-3 py-2 text-slate-900">{e.title}</td>
+                      <td className="px-3 py-2 text-slate-700">{e.category ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-700">{e.paymentMethod ?? "—"}</td>
+                      <td className="px-3 py-2 text-right text-slate-900">INR {e.amount.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
       ) : null}
 

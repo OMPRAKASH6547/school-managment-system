@@ -100,6 +100,60 @@ export default async function HomePage() {
 
         <PricingPlansSection plans={plans} />
       </main>
+
+      <footer className="border-t border-white/10 bg-black/25">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-3 lg:px-8">
+          <div>
+            <AppLogo dark compact />
+            <p className="mt-3 text-sm text-slate-300">
+              Complete school and coaching operations in one place: admissions, attendance, fees, classes, and reports.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">Quick links</h3>
+            <div className="mt-3 flex flex-col gap-2 text-sm">
+              <Link href="/login" className="text-slate-300 hover:text-white">Login</Link>
+              <Link href="/student/login" className="text-slate-300 hover:text-white">Student Login</Link>
+              <Link href="/register" className="text-slate-300 hover:text-white">Register School</Link>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-200">Support</h3>
+            <p className="mt-3 text-sm text-slate-300">
+              Need help with setup, onboarding, or billing? Reach out to your account manager or support team.
+            </p>
+            <div className="mt-3 space-y-1 text-sm">
+              <p>
+                <a
+                  href="https://wa.me/919708082526"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-slate-300 hover:text-white hover:underline"
+                >
+                  Mobile / WhatsApp: +91 9708082526
+                </a>
+              </p>
+              <p>
+                <a
+                  href="mailto:rajk0723577@gmail.com"
+                  className="text-slate-300 hover:text-white hover:underline"
+                >
+                  Email: rajk0723577@gmail.com
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/10">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 text-xs text-slate-400 sm:px-6 lg:px-8">
+            <p>© {new Date().getFullYear()} School SaaS. All rights reserved.</p>
+            <p>Built for Schools & Coaching Institutes</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

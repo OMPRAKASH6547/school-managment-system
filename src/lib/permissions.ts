@@ -19,6 +19,7 @@ export type PermissionModule =
   | "books"
   | "hostel"
   | "transport"
+  | "expenses"
   | "branches"
   | "branches.select"
   | "teacher-assignments"
@@ -45,6 +46,7 @@ const roleRules: Record<UserRole, PermissionRules> = {
     books: ["read", "write"],
     hostel: ["read", "write"],
     transport: ["read", "write"],
+    expenses: ["read", "write"],
     branches: ["read", "write"],
     "branches.select": ["read", "write"],
     "teacher-assignments": ["read", "write"],
@@ -67,6 +69,7 @@ const roleRules: Record<UserRole, PermissionRules> = {
     books: ["read", "write"],
     hostel: ["read", "write"],
     transport: ["read", "write"],
+    expenses: ["read", "write"],
     branches: ["read", "write"],
     "branches.select": ["read", "write"],
     "teacher-assignments": ["read", "write"],
@@ -89,6 +92,7 @@ const roleRules: Record<UserRole, PermissionRules> = {
     books: ["read", "write"],
     hostel: ["read", "write"],
     transport: ["read", "write"],
+    expenses: ["read", "write"],
     branches: ["read", "write"],
     "branches.select": ["read", "write"],
     "teacher-assignments": ["read", "write"],
@@ -101,6 +105,7 @@ const roleRules: Record<UserRole, PermissionRules> = {
     "fees.verify": ["read", "write"],
     books: ["read", "write"],
     "staff-attendance": ["read", "write"],
+    expenses: ["read", "write"],
     "branches.select": ["read", "write"],
   },
   teacher: {
@@ -109,6 +114,7 @@ const roleRules: Record<UserRole, PermissionRules> = {
     "examinations.marks": ["read", "write"],
     books: ["read", "write"],
     transport: ["read", "write"],
+    expenses: ["read", "write"],
     "branches.select": ["read", "write"],
   },
   staff: {
@@ -116,6 +122,7 @@ const roleRules: Record<UserRole, PermissionRules> = {
     "staff-attendance": ["read", "write"],
     books: ["read", "write"],
     transport: ["read", "write"],
+    expenses: ["read", "write"],
     "branches.select": ["read", "write"],
   },
   student: {},

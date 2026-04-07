@@ -4,6 +4,7 @@ import { LogoUploadForm } from "@/app/components/LogoUploadForm";
 import { BranchCreateForm } from "@/app/components/BranchCreateForm";
 import { BranchManageList } from "@/app/components/BranchManageList";
 import { SchoolAppearanceForm } from "@/app/components/SchoolAppearanceForm";
+import { AdvancedSetupForm } from "@/app/components/AdvancedSetupForm";
 import { redirect } from "next/navigation";
 
 export default async function SchoolSettingsPage() {
@@ -23,6 +24,12 @@ export default async function SchoolSettingsPage() {
       email: true,
       pdfAccentColor: true,
       dashboardTheme: true,
+      paymentGatewayEnabled: true,
+      paymentGatewayProvider: true,
+      payuMerchantKey: true,
+      payuMerchantSalt: true,
+      payuSuccessUrl: true,
+      payuFailureUrl: true,
     },
   });
   if (!org) return null;
@@ -44,6 +51,22 @@ export default async function SchoolSettingsPage() {
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-school-navy">Appearance & PDF theme</h2>
         <SchoolAppearanceForm pdfAccentColor={org.pdfAccentColor} dashboardTheme={org.dashboardTheme} />
+      </div>
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-school-navy">Advanced setup</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Configure online payment gateway for student fee payments. Dashboard payment options appear only when enabled.
+        </p>
+        <div className="mt-4">
+          <AdvancedSetupForm
+            paymentGatewayEnabled={org.paymentGatewayEnabled}
+            paymentGatewayProvider={org.paymentGatewayProvider}
+            payuMerchantKey={org.payuMerchantKey}
+            payuMerchantSalt={org.payuMerchantSalt}
+            payuSuccessUrl={org.payuSuccessUrl}
+            payuFailureUrl={org.payuFailureUrl}
+          />
+        </div>
       </div>
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-school-navy">School details</h2>

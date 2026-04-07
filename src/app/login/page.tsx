@@ -7,7 +7,7 @@ import { AppLogo } from "@/components/AppLogo";
 export default async function LoginPage() {
   const session = await getSession();
   if (session) {
-    redirect(session.role === "super_admin" ? "/super-admin" : "/school");
+    redirect(session.role === "super_admin" ? "/super-admin" : session.role === "student" ? "/student" : "/school");
   }
 
   return (
@@ -22,12 +22,15 @@ export default async function LoginPage() {
             <p className="mt-1 text-sm text-slate-500">Enter your credentials</p>
           </div>
           <LoginForm />
-          <p className="mt-6 text-center text-sm text-slate-600">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="font-medium text-primary-600 hover:text-primary-700">
-              Register your school
-            </Link>
-          </p>
+          <div className="mt-6 space-y-2 text-center text-sm">
+            <p className="text-slate-600">
+              Student?{" "}
+              <Link href="/student/login" className="font-medium text-primary-600 hover:text-primary-700">
+                Login here
+              </Link>
+            </p>
+            <p className="text-slate-500">For new student access, contact your school office.</p>
+          </div>
         </div>
       </div>
     </div>
